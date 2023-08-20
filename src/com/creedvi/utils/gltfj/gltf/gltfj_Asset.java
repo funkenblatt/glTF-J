@@ -3,6 +3,7 @@ package com.creedvi.utils.gltfj.gltf;
 import java.util.ArrayList;
 
 public class gltfj_Asset {
+
     public String version, generator, copyright, minVersion;
     int extensionsCount;
 

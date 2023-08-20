@@ -14,7 +14,8 @@ import com.creedvi.utils.gltfj.gltf.mesh.gltfj_MorphTarget;
 import com.creedvi.utils.gltfj.gltf.mesh.gltfj_Primitive;
 import com.creedvi.utils.gltfj.gltf.texture.gltfj_Sampler;
 import com.creedvi.utils.gltfj.gltf.texture.gltfj_Texture;
-import com.fasterxml.jackson.jr.ob.JSON;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -22,941 +23,1070 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Map;
-
-import static com.creedvi.utils.gltfj.gltf.gltfj_Light.LightType.INVALID;
 
 public class gltfj {
 
     private static String filepath;
 
     public static gltfj_glTF Read(String fileName) {
-        gltfj_glTF result = null;
+        gltfj_glTF result = new gltfj_glTF();
 
         filepath = fileName.substring(0, fileName.lastIndexOf("/") + 1);
 
         if (fileName.substring(fileName.lastIndexOf(".")).equalsIgnoreCase(".gltf")) {
             String jsonText = LoadFileText(fileName);
             result = ReadJSON(jsonText);
-        } else if (fileName.substring(fileName.lastIndexOf(".")).equalsIgnoreCase(".glb")) {
+            result.fileType = gltfj_glTF.FileType.GLTF;
+        }
+        else if (fileName.substring(fileName.lastIndexOf(".")).equalsIgnoreCase(".glb")) {
             byte[] fileData = LoadFileData(fileName);
             result = ReadBinary(fileData);
-        } else {
+            result.fileType = gltfj_glTF.FileType.GLB;
+        }
+        else {
             System.out.println("[glTF-J] ERROR: Unknown file type " + fileName.substring(fileName.lastIndexOf(".")));
+            result.fileType = gltfj_glTF.FileType.INVALID;
         }
 
         return result;
     }
 
     private static gltfj_glTF ReadJSON(String jsonText) {
-        Map<String, Object> jsonObjects;
         gltfj_glTF result = new gltfj_glTF();
+        ObjectMapper mapper = new ObjectMapper();
 
         try {
-            jsonObjects = JSON.std.mapFrom(jsonText);
+            JsonNode root = mapper.readTree(jsonText);
 
-            Map<String, Object> assetMap = (Map<String, Object>) jsonObjects.get("asset");
-            if (assetMap != null) {
-                result.asset.version = String.valueOf(assetMap.get("version"));
-                result.asset.minVersion = String.valueOf(assetMap.get("minVersion"));
-                result.asset.generator = String.valueOf(assetMap.get("generator"));
-                result.asset.copyright = String.valueOf(assetMap.get("copyright"));
+            JsonNode asset = root.path("asset");
+            if (!asset.isMissingNode()) {
+                result.asset.version = asset.path("version").asText();
+                result.asset.minVersion = asset.path("minVersion").asText();
+                result.asset.generator = asset.path("generator").asText();
+                result.asset.copyright = asset.path("copyright").asText();
             }
 
-            ArrayList<Map> meshes = (ArrayList<Map>) jsonObjects.get("meshes");
-            if (meshes != null) {
-                for (int m = 0; m < meshes.size(); m++) {
+            JsonNode meshes = root.path("meshes");
+            if (!meshes.isMissingNode()) {
+                int m = 0;
+                for (JsonNode node : meshes) {
                     result.meshes.add(m, new gltfj_Mesh());
 
-                    result.meshes.get(m).name = String.valueOf(meshes.get(m).get("name"));
-                    ArrayList<Double> m_weight = (ArrayList<Double>) meshes.get(m).get("weights");
-                    if (m_weight != null) {
-                        result.meshes.get(m).weights = new double[m_weight.size()];
-                        for (int w = 0; w < m_weight.size(); w++) {
-                            result.meshes.get(m).weights[w] = m_weight.get(w);
+                    result.meshes.get(m).name = node.path("name").asText();
+                    JsonNode weight = node.path("weight");
+                    if (!weight.isMissingNode()) {
+                        result.meshes.get(m).weights = new double[weight.size()];
+                        for (int w = 0; w < weight.size(); w++) {
+                            result.meshes.get(m).weights[w] = weight.get(w).asDouble();
                         }
-                        result.meshes.get(m).weightsCount = m_weight.size();
+                        result.meshes.get(m).weightsCount = weight.size();
                     }
 
-                    ArrayList<Map> primitives = (ArrayList<Map>) meshes.get(m).get("primitives");
-                    for (int p = 0; p < primitives.size(); p++) {
-                        result.meshes.get(m).primitives.add(p, new gltfj_Primitive());
+                    JsonNode primitives = node.path("primitives");
+                    if (!primitives.isMissingNode()) {
+                        int p = 0;
+                        for (JsonNode pri : primitives) {
+                            result.meshes.get(m).primitives.add(p, new gltfj_Primitive());
 
-                        result.meshes.get(m).primitives.get(p).indices = (primitives.get(p).get("indices") == null) ? 0 : (int) primitives.get(p).get("indices");
-                        result.meshes.get(m).primitives.get(p).material = (primitives.get(p).get("material") == null) ? 0 : (int) primitives.get(p).get("material");
-                        int mode = (primitives.get(p).get("mode") == null) ? 0 : (int) primitives.get(p).get("mode");
-                        result.meshes.get(m).primitives.get(p).type = gltfj_Primitive.PrimitiveType.values()[mode];
+                            result.meshes.get(m).primitives.get(p).indices = pri.path("indices").asInt();
+                            result.meshes.get(m).primitives.get(p).material = pri.path("material").asInt();
+                            int mode = pri.path("mode").asInt(0);
+                            result.meshes.get(m).primitives.get(p).type = gltfj_Primitive.PrimitiveType.values()[mode];
 
-                        Map<String, Integer> attrib = (Map<String, Integer>) primitives.get(p).get("attributes");
-                        int a = 0;
-                        for (Map.Entry<String, Integer> entry : attrib.entrySet()) {
-                            result.meshes.get(m).primitives.get(p).attributes.add(a, new gltfj_Attribute());
-                            result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.valueOf(entry.getKey());
-                            result.meshes.get(m).primitives.get(p).attributes.get(a).index = entry.getValue();
-                            a++;
-                        }
-                        result.meshes.get(m).primitives.get(p).attributesCount = a;
-
-                        ArrayList<Map> tgts = (ArrayList<Map>) primitives.get(p).get("targets");
-                        if (tgts != null) {
-                            for (int t = 0; t < tgts.size(); t++) {
-                                result.meshes.get(m).primitives.get(p).targets.add(t, new gltfj_MorphTarget());
-
-                                Map<String, Integer> tgt_attrib = tgts.get(0);
-                                int ta = 0;
-                                for (Map.Entry<String, Integer> entry : tgt_attrib.entrySet()) {
-                                    result.meshes.get(m).primitives.get(p).targets.get(t).attributes.add(ta, new gltfj_Attribute());
-                                    result.meshes.get(m).primitives.get(p).targets.get(t).attributes.get(ta).type = gltfj_Attribute.AttributeType.valueOf(entry.getKey());
-                                    result.meshes.get(m).primitives.get(p).targets.get(t).attributes.get(ta).index = entry.getValue();
-                                    ta++;
-                                }
-                                result.meshes.get(m).primitives.get(p).targets.get(t).attributeCount = ta;
-
+                            JsonNode attrib = pri.path("attributes");
+                            int a = 0;
+                            if (!attrib.path("POSITION").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.POSITION;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("POSITION").asInt();
+                                a++;
                             }
+                            if (!attrib.path("NORMAL").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.NORMAL;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("NORMAL").asInt();
+                                a++;
+                            }
+                            if (!attrib.path("TANGENT").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.TANGENT;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("TANGENT").asInt();
+                                a++;
+                            }
+                            if (!attrib.path("TEXCOORD_0").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.TEXCOORD_0;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("TEXCOORD_0").asInt();
+                                a++;
+                            }
+                            if (!attrib.path("COLOR").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.COLOR;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("COLOR").asInt();
+                                a++;
+                            }
+                            if (!attrib.path("JOINTS").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.JOINTS;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("JOINTS").asInt();
+                                a++;
+                            }
+                            if (!attrib.path("WEIGHTS").isMissingNode()) {
+                                result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.WEIGHTS;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("WEIGHTS").asInt();
+                                a++;
+                            }
+                            result.meshes.get(m).primitives.get(p).attributesCount = a;
+
+                            JsonNode targets = primitives.path("targets");
+                            if (!targets.isMissingNode()) {
+                                int t = 0;
+                                for (; t < targets.size(); t++) {
+                                    result.meshes.get(m).primitives.get(p).targets.add(t, new gltfj_MorphTarget());
+
+                                    JsonNode target = targets.get(t);
+                                    int ta = 0;
+                                    if (!target.path("POSITION").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.POSITION;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("POSITION").asInt();
+                                        ta++;
+                                    }
+                                    if (!target.path("NORMAL").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.NORMAL;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("NORMAL").asInt();
+                                        ta++;
+                                    }
+                                    if (!target.path("TANGENT").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.TANGENT;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("TANGENT").asInt();
+                                        ta++;
+                                    }
+                                    if (!target.path("TEXCOORD_0").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.TEXCOORD_0;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("TEXCOORD_0").asInt();
+                                        ta++;
+                                    }
+                                    if (!target.path("COLOR").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.COLOR;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("COLOR").asInt();
+                                        ta++;
+                                    }
+                                    if (!target.path("JOINTS").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.JOINTS;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("JOINTS").asInt();
+                                        ta++;
+                                    }
+                                    if (!target.path("WEIGHTS").isMissingNode()) {
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.WEIGHTS;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("WEIGHTS").asInt();
+                                        ta++;
+                                    }
+                                    result.meshes.get(m).primitives.get(p).targets.get(t).attributeCount = ta;
+                                }
+                                result.meshes.get(m).primitives.get(p).targetsCount = t;
+                            }
+
+                            p++;
                         }
+
 
                     }
 
+                    m++;
                 }
-                result.meshCount = result.meshes.size();
+                result.meshCount = m;
             }
 
-            ArrayList<Map> materials = (ArrayList<Map>) jsonObjects.get("materials");
-            if (materials != null) {
-                for (int m = 0; m < materials.size(); m++) {
-                    result.materials.add(m, new gltfj_Material());
+            JsonNode materials = root.path("materials");
+            if (!materials.isMissingNode()) {
+                // TODO: 8/20/23
+                int m = 0;
+                for (JsonNode material : materials) {
+                    gltfj_Material mat = new gltfj_Material();
 
-                    result.materials.get(m).name = String.valueOf(materials.get(m).get("name"));
-                    result.materials.get(m).alphaMode = (materials.get(m).get("alphaMode") == null) ? null : gltfj_Material.AlphaMode.valueOf(String.valueOf(materials.get(m).get("alphaMode")));
-                    result.materials.get(m).alphaCutoff = (materials.get(m).get("alpheCutoff") == null) ? 0 : (double) materials.get(m).get("alpheCutoff");
-                    result.materials.get(m).doubleSided = (materials.get(m).get("doubleSided") == null) ? false : (boolean) materials.get(m).get("doubleSided");
-                    result.materials.get(m).unlit = (materials.get(m).get("unlit") == null) ? false : (boolean) materials.get(m).get("unlit");
-                    ArrayList<Double> emf = (ArrayList<Double>) materials.get(m).get("emissiveFactor");
-                    if (emf != null) {
+                    mat.name = material.path("name").asText();
+                    mat.alphaMode = gltfj_Material.AlphaMode.valueOf(material.path("alphaMode").asText("OPAQUE").toUpperCase());
+                    mat.alphaCutoff = material.path("alphaCutoff").asDouble();
+                    mat.doubleSided = material.path("doubleSided").asBoolean();
+                    mat.unlit = material.path("unlit").asBoolean();
+
+                    JsonNode emf = material.path("emmissiveFactor");
+                    if (!emf.isMissingNode()) {
                         for (int emff = 0; emff < emf.size(); emff++) {
-                            result.materials.get(m).emissiveFactor[emff] = emf.get(emff);
+                            mat.emissiveFactor[emff] = emf.get(emff).asDouble();
                         }
                     }
 
-                    Map<String, Object> normalTexture = (Map<String, Object>) materials.get(m).get("normalTexture");
-                    if (normalTexture != null) {
-                        result.materials.get(m).normalTexture.texture = (int) normalTexture.get("index");
-                        result.materials.get(m).normalTexture.texcoord = (int) normalTexture.get("texCoord");
-                        result.materials.get(m).normalTexture.scale = (normalTexture.get("scale") == null) ? 1.0f : (double) normalTexture.get("scale");
+                    JsonNode normalTexture = material.path("normalTexture");
+                    if (!normalTexture.isMissingNode()) {
+                        mat.normalTexture.texture = normalTexture.path("texture").asInt();
+                        mat.normalTexture.texcoord = normalTexture.path("texCoord").asInt();
+                        mat.normalTexture.scale = normalTexture.path("scale").asDouble();
 
-                        Map<String, Object> trans = (Map<String, Object>) normalTexture.get("transform");
-                        if (trans != null) {
-                            result.materials.get(m).normalTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                            result.materials.get(m).normalTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                            ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                            if (offset != null) {
-                                for (int of = 0; of < offset.size(); of++) {
-                                    result.materials.get(m).normalTexture.transform.offset[of] = offset.get(of);
-                                }
-                            }
-                            ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                            if (scale != null) {
-                                for (int sf = 0; sf < scale.size(); sf++) {
-                                    result.materials.get(m).normalTexture.transform.scale[sf] = scale.get(sf);
-                                }
+                        JsonNode trans = normalTexture.path("transform");
+                        if (!trans.isMissingNode()) {
+                            mat.normalTexture.transform.textcoord = trans.path("texCoord").asInt();
+                            mat.normalTexture.transform.rotation = trans.path("rotation").asDouble();
+                        }
+                        JsonNode offset = material.path("offset");
+                        if (!offset.isMissingNode()) {
+                            for (int off = 0; off < offset.size(); off++) {
+                                mat.normalTexture.transform.offset[off] = offset.get(off).asDouble();
                             }
                         }
-                    }
-
-                    Map<String, Object> occlusionTexture = (Map<String, Object>) materials.get(m).get("occlusionTexture");
-                    if (occlusionTexture != null) {
-                        result.materials.get(m).occlusionTexture.texture = (int) occlusionTexture.get("index");
-                        result.materials.get(m).occlusionTexture.texcoord = (int) occlusionTexture.get("texCoord");
-                        result.materials.get(m).occlusionTexture.scale = (occlusionTexture.get("scale") == null) ? 1.0f : (double) occlusionTexture.get("scale");
-
-                        Map<String, Object> trans = (Map<String, Object>) occlusionTexture.get("transform");
-                        if (trans != null) {
-                            result.materials.get(m).occlusionTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                            result.materials.get(m).occlusionTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                            ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                            if (offset != null) {
-                                for (int of = 0; of < offset.size(); of++) {
-                                    result.materials.get(m).occlusionTexture.transform.offset[of] = offset.get(of);
-                                }
-                            }
-                            ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                            if (scale != null) {
-                                for (int sf = 0; sf < scale.size(); sf++) {
-                                    result.materials.get(m).occlusionTexture.transform.scale[sf] = scale.get(sf);
-                                }
+                        JsonNode scale = material.path("scale");
+                        if (!scale.isMissingNode()) {
+                            for (int sca = 0; sca < scale.size(); sca++) {
+                                mat.normalTexture.transform.scale[sca] = scale.get(sca).asDouble();
                             }
                         }
                     }
 
-                    Map<String, Object> emissiveTexture = (Map<String, Object>) materials.get(m).get("emissiveTexture");
-                    if (emissiveTexture != null) {
-                        result.materials.get(m).emissiveTexture.texture = (int) emissiveTexture.get("index");
-                        result.materials.get(m).emissiveTexture.texcoord = (int) emissiveTexture.get("texCoord");
-                        result.materials.get(m).emissiveTexture.scale = (emissiveTexture.get("scale") == null) ? 1.0f : (double) emissiveTexture.get("scale");
+                    JsonNode occlusionTexture = material.path("occlusionTexture");
+                    if (!occlusionTexture.isMissingNode()) {
+                        mat.occlusionTexture.texture = occlusionTexture.path("texture").asInt();
+                        mat.occlusionTexture.texcoord = occlusionTexture.path("texCoord").asInt();
+                        mat.occlusionTexture.scale = occlusionTexture.path("scale").asDouble();
 
-                        Map<String, Object> trans = (Map<String, Object>) emissiveTexture.get("transform");
-                        if (trans != null) {
-                            result.materials.get(m).emissiveTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                            result.materials.get(m).emissiveTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                            ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                            if (offset != null) {
-                                for (int of = 0; of < offset.size(); of++) {
-                                    result.materials.get(m).emissiveTexture.transform.offset[of] = offset.get(of);
-                                }
+                        JsonNode trans = occlusionTexture.path("transform");
+                        if (!trans.isMissingNode()) {
+                            mat.occlusionTexture.transform.textcoord = trans.path("texCoord").asInt();
+                            mat.occlusionTexture.transform.rotation = trans.path("rotation").asDouble();
+                        }
+                        JsonNode offset = material.path("offset");
+                        if (!offset.isMissingNode()) {
+                            for (int off = 0; off < offset.size(); off++) {
+                                mat.occlusionTexture.transform.offset[off] = offset.get(off).asDouble();
                             }
-                            ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                            if (scale != null) {
-                                for (int sf = 0; sf < scale.size(); sf++) {
-                                    result.materials.get(m).emissiveTexture.transform.scale[sf] = scale.get(sf);
-                                }
+                        }
+                        JsonNode scale = material.path("scale");
+                        if (!scale.isMissingNode()) {
+                            for (int sca = 0; sca < scale.size(); sca++) {
+                                mat.occlusionTexture.transform.scale[sca] = scale.get(sca).asDouble();
                             }
                         }
                     }
 
-                    Map<String, Object> met = (Map<String, Object>) materials.get(m).get("pbrMetallicRoughness");
-                    if (met != null) {
-                        result.materials.get(m).hasMetallicRoughness = true;
+                    JsonNode emissiveTexture = material.path("emissiveTexture");
+                    if (!emissiveTexture.isMissingNode()) {
+                        mat.emissiveTexture.texture = emissiveTexture.path("texture").asInt();
+                        mat.emissiveTexture.texcoord = emissiveTexture.path("texCoord").asInt();
+                        mat.emissiveTexture.scale = emissiveTexture.path("scale").asDouble();
 
-                        ArrayList<Double> baseColour = (ArrayList<Double>) met.get("baseColorFactor");
-                        if (baseColour != null) {
+                        JsonNode trans = emissiveTexture.path("transform");
+                        if (!trans.isMissingNode()) {
+                            mat.emissiveTexture.transform.textcoord = trans.path("texCoord").asInt();
+                            mat.emissiveTexture.transform.rotation = trans.path("rotation").asDouble();
+                        }
+                        JsonNode offset = material.path("offset");
+                        if (!offset.isMissingNode()) {
+                            for (int off = 0; off < offset.size(); off++) {
+                                mat.emissiveTexture.transform.offset[off] = offset.get(off).asDouble();
+                            }
+                        }
+                        JsonNode scale = material.path("scale");
+                        if (!scale.isMissingNode()) {
+                            for (int sca = 0; sca < scale.size(); sca++) {
+                                mat.emissiveTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                            }
+                        }
+                    }
+
+                    JsonNode met = material.path("pbrMetallicRoughness");
+                    if (!met.isMissingNode()) {
+                        mat.hasMetallicRoughness = true;
+
+                        JsonNode baseColour = met.path("baseColorFactor");
+                        if (!baseColour.isMissingNode()) {
                             for (int bcf = 0; bcf < baseColour.size(); bcf++) {
-                                result.materials.get(m).metallicRoughness.baseColorFactor[bcf] = baseColour.get(bcf);
+                                mat.metallicRoughness.baseColorFactor[bcf] = baseColour.get(bcf).asDouble();
                             }
                         }
-                        result.materials.get(m).metallicRoughness.metallicFactor = (met.get("metallicFactor") == null) ? 0f : (double) met.get("metallicFactor");
-                        result.materials.get(m).metallicRoughness.roughnessFactor = (met.get("roughnessFactor") == null) ? 0f : (double) met.get("roughnessFactor");
+                        mat.metallicRoughness.metallicFactor = met.path("metallicFactor").asDouble();
+                        mat.metallicRoughness.roughnessFactor = met.path("roughnessFactor").asDouble();
 
-                        Map<String, Object> basetex = (Map<String, Object>) met.get("baseColorTexture");
-                        if (basetex != null) {
-                            result.materials.get(m).metallicRoughness.baseColorTexture.texture = (basetex.get("index") == null) ? 0 : (int) basetex.get("index");
-                            result.materials.get(m).metallicRoughness.baseColorTexture.texcoord = (basetex.get("texCoord") == null) ? 0 : (int) basetex.get("texCoord");
-                            result.materials.get(m).metallicRoughness.baseColorTexture.scale = (basetex.get("scale") == null) ? 1.0f : (double) basetex.get("scale");
+                        JsonNode baseTex = met.path("baseColorTexture");
+                        if (!baseTex.isMissingNode()) {
+                            mat.metallicRoughness.baseColorTexture.texture = baseTex.path("texture").asInt();
+                            mat.metallicRoughness.baseColorTexture.texcoord = baseTex.path("texCoord").asInt();
+                            mat.metallicRoughness.baseColorTexture.scale = baseTex.path("scale").asDouble();
 
-                            Map<String, Object> trans = (Map<String, Object>) basetex.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).metallicRoughness.baseColorTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).metallicRoughness.baseColorTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).metallicRoughness.baseColorTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).metallicRoughness.baseColorTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = baseTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.metallicRoughness.baseColorTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.metallicRoughness.baseColorTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.metallicRoughness.baseColorTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
-
-                        }
-
-                        Map<String, Object> mrtex = (Map<String, Object>) met.get("metallicRoughnessTexture");
-                        if (mrtex != null) {
-                            result.materials.get(m).metallicRoughness.baseColorTexture.texture = (basetex.get("index") == null) ? 0 : (int) basetex.get("index");
-                            result.materials.get(m).metallicRoughness.baseColorTexture.texcoord = (basetex.get("texCoord") == null) ? 0 : (int) basetex.get("texCoord");
-                            result.materials.get(m).metallicRoughness.metallicRoughnessTexture.scale = (mrtex.get("scale") == null) ? 1.0f : (double) mrtex.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) mrtex.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).metallicRoughness.metallicRoughnessTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).metallicRoughness.metallicRoughnessTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).metallicRoughness.metallicRoughnessTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).metallicRoughness.metallicRoughnessTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.metallicRoughness.baseColorTexture.transform.scale[sca] = scale.get(sca).asDouble();
                                 }
                             }
                         }
-                    }
 
-                    Map<String, Object> specGloss = (Map<String, Object>) materials.get(m).get("pbrSpecularGlossiness");
-                    if (specGloss != null) {
-                        result.materials.get(m).hasSpecularGlossiness = true;
+                        JsonNode mrTex = met.path("metallicRoughnessTexture");
+                        if (!mrTex.isMissingNode()) {
+                            mat.metallicRoughness.baseColorTexture.texture = mrTex.path("texture").asInt();
+                            mat.metallicRoughness.baseColorTexture.texcoord = mrTex.path("texCoord").asInt();
+                            mat.metallicRoughness.baseColorTexture.scale = mrTex.path("scale").asDouble();
 
-                        ArrayList<Double> diffuseFactor = (ArrayList<Double>) specGloss.get("diffuseFactor");
-                        for (int diff = 0; diff < diffuseFactor.size(); diff++) {
-                            result.materials.get(m).specularGlossiness.diffuseFactor[diff] = diffuseFactor.get(diff);
-                        }
-                        ArrayList<Double> specularFactor = (ArrayList<Double>) specGloss.get("specularFactor");
-                        for (int specf = 0; specf < diffuseFactor.size(); specf++) {
-                            result.materials.get(m).specularGlossiness.specularFactor[specf] = specularFactor.get(specf);
-                        }
-                        result.materials.get(m).specularGlossiness.glossinessFactor = (double) specGloss.get("glossinessFactor");
-
-                        Map<String, Object> diffuseTexture = (Map<String, Object>) specGloss.get("diffuseTexture");
-                        if (diffuseTexture != null) {
-                            result.materials.get(m).metallicRoughness.baseColorTexture.texture = (diffuseTexture.get("index") == null) ? 0 : (int) diffuseTexture.get("index");
-                            result.materials.get(m).metallicRoughness.baseColorTexture.texcoord = (diffuseTexture.get("texCoord") == null) ? 0 : (int) diffuseTexture.get("texCoord");
-                            result.materials.get(m).specularGlossiness.diffuseTexture.scale = (diffuseTexture.get("scale") == null) ? 1.0f : (double) diffuseTexture.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) diffuseTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).specularGlossiness.diffuseTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).specularGlossiness.diffuseTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).specularGlossiness.diffuseTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).specularGlossiness.diffuseTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = mrTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.metallicRoughness.baseColorTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.metallicRoughness.baseColorTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.metallicRoughness.baseColorTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
-
-                        }
-
-                        Map<String, Object> sgtex = (Map<String, Object>) specGloss.get("specularGlossinessTexture");
-                        if (sgtex != null) {
-                            result.materials.get(m).specularGlossiness.specularGlossinessTexture.texture = (int) sgtex.get("index");
-                            result.materials.get(m).specularGlossiness.specularGlossinessTexture.texcoord = (int) sgtex.get("texCoord");
-                            result.materials.get(m).specularGlossiness.specularGlossinessTexture.scale = (sgtex.get("scale") == null) ? 1.0f : (double) sgtex.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) sgtex.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).specularGlossiness.specularGlossinessTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).specularGlossiness.specularGlossinessTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).specularGlossiness.specularGlossinessTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).specularGlossiness.specularGlossinessTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.metallicRoughness.baseColorTexture.transform.scale[sca] = scale.get(sca).asDouble();
                                 }
                             }
                         }
                     }
 
-                    Map<String, Object> sheen = (Map<String, Object>) materials.get(m).get("sheen");
-                    if (sheen != null) {
-                        result.materials.get(m).hasSheen = true;
+                    JsonNode specGloss = material.path("pbrSpecularGlossiness");
+                    if (!specGloss.isMissingNode()) {
+                        mat.hasSpecularGlossiness = true;
 
-                        ArrayList<Double> sheenColor = (ArrayList<Double>) sheen.get("sheenColorFactor");
-                        for (int sh = 0; sh < sheenColor.size(); sh++) {
-                            result.materials.get(m).sheen.sheenColorFactor[sh] = sheenColor.get(sh);
+                        JsonNode diffuseFactor = specGloss.path("diffuseFactor");
+                        if (!diffuseFactor.isMissingNode()) {
+                            for (int diff = 0; diff < diffuseFactor.size(); diff++) {
+                                mat.specularGlossiness.diffuseFactor[diff] = diffuseFactor.get(diff).asDouble();
+                            }
                         }
-                        result.materials.get(m).sheen.sheenRoughnessFactor = (double) sheen.get("sheenRoughnessFactor");
+                        JsonNode specularFactor = specGloss.path("specularFactor");
+                        if (!specularFactor.isMissingNode()) {
+                            for (int specf = 0; specf < specularFactor.size(); specf++) {
+                                mat.specularGlossiness.specularFactor[specf] = specularFactor.get(specf).asDouble();
+                            }
+                        }
+                        mat.specularGlossiness.glossinessFactor = specGloss.path("glossinessFactor").asDouble();
 
-                        Map<String, Object> sctex = (Map<String, Object>) sheen.get("sheenColorTexture");
-                        if (sctex != null) {
-                            result.materials.get(m).sheen.sheenColorTexture.texture = (int) sctex.get("index");
-                            result.materials.get(m).sheen.sheenColorTexture.texcoord = (int) sctex.get("texCoord");
-                            result.materials.get(m).sheen.sheenColorTexture.scale = (sctex.get("scale") == null) ? 1.0f : (double) sctex.get("scale");
+                        JsonNode diffTex = specGloss.path("diffuseTexture");
+                        if (!diffTex.isMissingNode()) {
+                            mat.specularGlossiness.diffuseTexture.texture = diffTex.path("texture").asInt();
+                            mat.specularGlossiness.diffuseTexture.texcoord = diffTex.path("texCoord").asInt();
+                            mat.specularGlossiness.diffuseTexture.scale = diffTex.path("scale").asDouble();
 
-                            Map<String, Object> trans = (Map<String, Object>) sctex.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).sheen.sheenColorTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).sheen.sheenColorTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).sheen.sheenColorTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).sheen.sheenColorTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = diffTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.specularGlossiness.diffuseTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.specularGlossiness.diffuseTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.specularGlossiness.diffuseTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
-
-                        }
-
-                        Map<String, Object> srtex = (Map<String, Object>) sheen.get("sheenRoughnessTexture");
-                        if (srtex != null) {
-                            result.materials.get(m).sheen.sheenRoughnessTexture.texture = (int) srtex.get("index");
-                            result.materials.get(m).sheen.sheenRoughnessTexture.texcoord = (int) srtex.get("texCoord");
-                            result.materials.get(m).sheen.sheenRoughnessTexture.scale = (srtex.get("scale") == null) ? 1.0f : (double) srtex.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) srtex.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).sheen.sheenRoughnessTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).sheen.sheenRoughnessTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).sheen.sheenRoughnessTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).sheen.sheenRoughnessTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.specularGlossiness.diffuseTexture.transform.scale[sca] = scale.get(sca).asDouble();
                                 }
                             }
                         }
-                    }
 
-                    Map<String, Object> spec = (Map<String, Object>) materials.get(m).get("pbrSpecularGlossiness");
-                    if (spec != null) {
-                        result.materials.get(m).hasSpecular = true;
+                        JsonNode sgTex = specGloss.path("specularGlossinessTexture");
+                        if (!sgTex.isMissingNode()) {
+                            mat.specularGlossiness.specularGlossinessTexture.texture = sgTex.path("texture").asInt();
+                            mat.specularGlossiness.specularGlossinessTexture.texcoord = sgTex.path("texCoord").asInt();
+                            mat.specularGlossiness.specularGlossinessTexture.scale = sgTex.path("scale").asDouble();
 
-                        ArrayList<Double> scFactor = (ArrayList<Double>) spec.get("specularColorFactor");
-                        for (int diff = 0; diff < scFactor.size(); diff++) {
-                            result.materials.get(m).specular.specularColorFactor[diff] = scFactor.get(diff);
-                        }
-                        result.materials.get(m).specular.specularFactor = (double) spec.get("glossinessFactor");
-
-                        Map<String, Object> specularTexture = (Map<String, Object>) spec.get("specularTexture");
-                        if (specularTexture != null) {
-                            result.materials.get(m).specular.specularTexture.texture = (int) specularTexture.get("index");
-                            result.materials.get(m).specular.specularTexture.texcoord = (int) specularTexture.get("texCoord");
-                            result.materials.get(m).specular.specularTexture.scale = (specularTexture.get("scale") == null) ? 1.0f : (double) specularTexture.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) specularTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).specular.specularTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).specular.specularTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).specular.specularTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).specular.specularTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = sgTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.specularGlossiness.specularGlossinessTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.specularGlossiness.specularGlossinessTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.specularGlossiness.specularGlossinessTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
-
-                        }
-
-                        Map<String, Object> specularColorTexture = (Map<String, Object>) spec.get("specularColorTexture");
-                        if (specularColorTexture != null) {
-                            result.materials.get(m).specular.specularColorTexture.texture = (int) specularColorTexture.get("index");
-                            result.materials.get(m).specular.specularColorTexture.texcoord = (int) specularColorTexture.get("texCoord");
-                            result.materials.get(m).specular.specularColorTexture.scale = (specularColorTexture.get("scale") == null) ? 1.0f : (double) specularColorTexture.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) specularColorTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).specular.specularColorTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).specular.specularColorTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).specular.specularColorTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).specular.specularColorTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.specularGlossiness.specularGlossinessTexture.transform.scale[sca] = scale.get(sca).asDouble();
                                 }
                             }
                         }
                     }
 
-                    Map<String, Object> transmission = (Map<String, Object>) materials.get(m).get("transmission");
-                    if (transmission != null) {
-                        result.materials.get(m).hasTransmission = true;
+                    JsonNode clear = material.path("clearCoat");
+                    if (!clear.isMissingNode()) {
+                        mat.hasMetallicRoughness = true;
 
-                        result.materials.get(m).transmission.transmissionFactor = (double) transmission.get("transmissionFactor");
+                        JsonNode diffuse = clear.path("baseColorFactor");
+                        if (!diffuse.isMissingNode()) {
+                            for (int diff = 0; diff < diffuse.size(); diff++) {
+                                mat.clearCoat.diffuseFactor[diff] = diffuse.get(diff).asDouble();
+                            }
+                        }
+                        JsonNode specular = clear.path("baseColorFactor");
+                        if (!specular.isMissingNode()) {
+                            for (int diff = 0; diff < specular.size(); diff++) {
+                                mat.clearCoat.diffuseFactor[diff] = specular.get(diff).asDouble();
+                            }
+                        }
+                        mat.clearCoat.glossinessFactor = clear.path("glossinessFactor").asDouble();
 
-                        Map<String, Object> transmissionTexture = (Map<String, Object>) transmission.get("transmissionTexture");
-                        if (transmissionTexture != null) {
-                            result.materials.get(m).transmission.transmissionTexture.texture = (int) transmissionTexture.get("index");
-                            result.materials.get(m).transmission.transmissionTexture.texcoord = (int) transmissionTexture.get("texCoord");
-                            result.materials.get(m).transmission.transmissionTexture.scale = (transmissionTexture.get("scale") == null) ? 1.0f : (double) transmissionTexture.get("scale");
+                        JsonNode ccTex = clear.path("clearCoatTexture");
+                        if (!ccTex.isMissingNode()) {
+                            mat.clearCoat.clearCoatTexture.texture = ccTex.path("texture").asInt();
+                            mat.clearCoat.clearCoatTexture.texcoord = ccTex.path("texCoord").asInt();
+                            mat.clearCoat.clearCoatTexture.scale = ccTex.path("scale").asDouble();
 
-                            Map<String, Object> trans = (Map<String, Object>) transmissionTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).transmission.transmissionTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).transmission.transmissionTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).transmission.transmissionTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).transmission.transmissionTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = ccTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.clearCoat.clearCoatTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.clearCoat.clearCoatTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.clearCoat.clearCoatTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.clearCoat.clearCoatTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
+                        }
 
+                        JsonNode ccrTex = clear.path("clearCoatRoughnessTexture");
+                        if (!ccrTex.isMissingNode()) {
+                            mat.clearCoat.clearCoatRoughnessTexture.texture = ccrTex.path("texture").asInt();
+                            mat.clearCoat.clearCoatRoughnessTexture.texcoord = ccrTex.path("texCoord").asInt();
+                            mat.clearCoat.clearCoatRoughnessTexture.scale = ccrTex.path("scale").asDouble();
+
+                            JsonNode trans = ccrTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.clearCoat.clearCoatRoughnessTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.clearCoat.clearCoatRoughnessTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.clearCoat.clearCoatRoughnessTexture.transform.offset[off] = offset.get(off).asDouble();
+                                }
+                            }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.clearCoat.clearCoatRoughnessTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
+                        }
+
+                        JsonNode ccnTex = clear.path("clearCoatNormalTexture");
+                        if (!ccnTex.isMissingNode()) {
+                            mat.clearCoat.clearCoatNormalTexture.texture = ccnTex.path("texture").asInt();
+                            mat.clearCoat.clearCoatNormalTexture.texcoord = ccnTex.path("texCoord").asInt();
+                            mat.clearCoat.clearCoatNormalTexture.scale = ccnTex.path("scale").asDouble();
+
+                            JsonNode trans = ccnTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.clearCoat.clearCoatNormalTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.clearCoat.clearCoatNormalTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.clearCoat.clearCoatNormalTexture.transform.offset[off] = offset.get(off).asDouble();
+                                }
+                            }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.clearCoat.clearCoatNormalTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
                         }
                     }
 
-                    Map<String, Object> vol = (Map<String, Object>) materials.get(m).get("volume");
-                    if (vol != null) {
-                        result.materials.get(m).hasVolume = true;
+                    JsonNode ior = material.path("ior");
+                    if (!ior.isMissingNode()) {
+                        mat.hasIor = true;
+                        mat.ior.ior = ior.path("ior").asDouble();
+                    }
 
-                        ArrayList<Double> attnFactor = (ArrayList<Double>) vol.get("attenuationColor");
-                        for (int diff = 0; diff < attnFactor.size(); diff++) {
-                            result.materials.get(m).volume.attenuationColor[diff] = attnFactor.get(diff);
+                    JsonNode specular = material.path("specular");
+                    if (!specular.isMissingNode()) {
+                        mat.hasSpecular = true;
+
+                        JsonNode specularColour = specular.path("specularColorFactor");
+                        if (!specularColour.isMissingNode()) {
+                            for (int scf = 0; scf < specularColour.size(); scf++) {
+                                mat.specular.specularColorFactor[scf] = specularColour.get(scf).asDouble();
+                            }
                         }
-                        result.materials.get(m).volume.thicknessFactor = (double) vol.get("thicknessFactor");
-                        result.materials.get(m).volume.attenuationDistance = (double) vol.get("attenuationDistance");
+                        mat.specular.specularFactor = specular.path("specularFactor").asDouble();
 
-                        Map<String, Object> thicknessTexture = (Map<String, Object>) vol.get("thicknessTexture");
-                        if (thicknessTexture != null) {
-                            result.materials.get(m).volume.thicknessTexture.texture = (int) thicknessTexture.get("index");
-                            result.materials.get(m).volume.thicknessTexture.texcoord = (int) thicknessTexture.get("texCoord");
-                            result.materials.get(m).volume.thicknessTexture.scale = (thicknessTexture.get("scale") == null) ? 1.0f : (double) thicknessTexture.get("scale");
+                        JsonNode specTex = specular.path("specularTexture");
+                        if (!specTex.isMissingNode()) {
+                            mat.specular.specularTexture.texture = specTex.path("texture").asInt();
+                            mat.specular.specularTexture.texcoord = specTex.path("texCoord").asInt();
+                            mat.specular.specularTexture.scale = specTex.path("scale").asDouble();
 
-                            Map<String, Object> trans = (Map<String, Object>) thicknessTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).volume.thicknessTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).volume.thicknessTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).volume.thicknessTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).volume.thicknessTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = specTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.specular.specularTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.specular.specularTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.specular.specularTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.specular.specularTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
+                        }
 
+                        JsonNode scTex = specular.path("specularColorTexture");
+                        if (!scTex.isMissingNode()) {
+                            mat.specular.specularColorTexture.texture = scTex.path("texture").asInt();
+                            mat.specular.specularColorTexture.texcoord = scTex.path("texCoord").asInt();
+                            mat.specular.specularColorTexture.scale = scTex.path("scale").asDouble();
+
+                            JsonNode trans = scTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.specular.specularColorTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.specular.specularColorTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.specular.specularColorTexture.transform.offset[off] = offset.get(off).asDouble();
+                                }
+                            }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.specular.specularColorTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
                         }
                     }
 
-                    Map<String, Object> clear = (Map<String, Object>) materials.get(m).get("clearCoat");
-                    if (clear != null) {
-                        result.materials.get(m).hasClearCoat = true;
+                    JsonNode sheen = material.path("sheen");
+                    if (!sheen.isMissingNode()) {
+                        mat.hasSheen = true;
 
-                        ArrayList<Double> difFactor = (ArrayList<Double>) clear.get("diffuseFactor");
-                        for (int diff = 0; diff < difFactor.size(); diff++) {
-                            result.materials.get(m).clearCoat.diffuseFactor[diff] = difFactor.get(diff);
+                        JsonNode sheenColorFactor = sheen.path("sheenColorFactor");
+                        if (!sheenColorFactor.isMissingNode()) {
+                            for (int scf = 0; scf < sheenColorFactor.size(); scf++) {
+                                mat.sheen.sheenColorFactor[scf] = sheenColorFactor.get(scf).asDouble();
+                            }
                         }
-                        ArrayList<Double> specFactor = (ArrayList<Double>) clear.get("specularFactor");
-                        for (int specf = 0; specf < specFactor.size(); specf++) {
-                            result.materials.get(m).clearCoat.specularFactor[specf] = specFactor.get(specf);
-                        }
-                        result.materials.get(m).clearCoat.glossinessFactor = (double) clear.get("glossinessFactor");
+                        mat.sheen.sheenRoughnessFactor = sheen.path("sheenRoughnessFactor").asDouble();
 
-                        Map<String, Object> clearCoatTexture = (Map<String, Object>) clear.get("clearCoatTexture");
-                        if (clearCoatTexture != null) {
-                            result.materials.get(m).clearCoat.clearCoatTexture.texture = (int) clearCoatTexture.get("index");
-                            result.materials.get(m).clearCoat.clearCoatTexture.texcoord = (int) clearCoatTexture.get("texCoord");
-                            result.materials.get(m).clearCoat.clearCoatTexture.scale = (clearCoatTexture.get("scale") == null) ? 1.0f : (double) clearCoatTexture.get("scale");
+                        JsonNode scTex = sheen.path("sheenColorTexture");
+                        if (!scTex.isMissingNode()) {
+                            mat.sheen.sheenColorTexture.texture = scTex.path("texture").asInt();
+                            mat.sheen.sheenColorTexture.texcoord = scTex.path("texCoord").asInt();
+                            mat.sheen.sheenColorTexture.scale = scTex.path("scale").asDouble();
 
-                            Map<String, Object> trans = (Map<String, Object>) clearCoatTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).clearCoat.clearCoatTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).clearCoat.clearCoatTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).clearCoat.clearCoatTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).clearCoat.clearCoatTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = scTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.sheen.sheenColorTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.sheen.sheenColorTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.sheen.sheenColorTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
-
-                        }
-
-                        Map<String, Object> clearCoatRoughnessTexture = (Map<String, Object>) clear.get("clearCoatRoughnessTexture");
-                        if (clearCoatRoughnessTexture != null) {
-                            result.materials.get(m).clearCoat.clearCoatRoughnessTexture.texture = (int) clearCoatRoughnessTexture.get("index");
-                            result.materials.get(m).clearCoat.clearCoatRoughnessTexture.texcoord = (int) clearCoatRoughnessTexture.get("texCoord");
-                            result.materials.get(m).clearCoat.clearCoatRoughnessTexture.scale = (clearCoatRoughnessTexture.get("scale") == null) ? 1.0f : (double) clearCoatRoughnessTexture.get("scale");
-
-                            Map<String, Object> trans = (Map<String, Object>) clearCoatRoughnessTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).clearCoat.clearCoatRoughnessTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).clearCoat.clearCoatRoughnessTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).clearCoat.clearCoatRoughnessTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).clearCoat.clearCoatRoughnessTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.sheen.sheenColorTexture.transform.scale[sca] = scale.get(sca).asDouble();
                                 }
                             }
                         }
 
-                        Map<String, Object> clearCoatNormalTexture = (Map<String, Object>) clear.get("clearCoatNormalTexture");
-                        if (clearCoatNormalTexture != null) {
-                            result.materials.get(m).clearCoat.clearCoatNormalTexture.texture = (int) clearCoatNormalTexture.get("index");
-                            result.materials.get(m).clearCoat.clearCoatNormalTexture.texcoord = (int) clearCoatNormalTexture.get("texCoord");
-                            result.materials.get(m).clearCoat.clearCoatNormalTexture.scale = (clearCoatNormalTexture.get("scale") == null) ? 1.0f : (double) clearCoatNormalTexture.get("scale");
+                        JsonNode srTex = sheen.path("sheenRoughnessTexture");
+                        if (!srTex.isMissingNode()) {
+                            mat.sheen.sheenRoughnessTexture.texture = srTex.path("texture").asInt();
+                            mat.sheen.sheenRoughnessTexture.texcoord = srTex.path("texCoord").asInt();
+                            mat.sheen.sheenRoughnessTexture.scale = srTex.path("scale").asDouble();
 
-                            Map<String, Object> trans = (Map<String, Object>) clearCoatNormalTexture.get("transform");
-                            if (trans != null) {
-                                result.materials.get(m).clearCoat.clearCoatNormalTexture.transform.textcoord = (trans.get("texCoord") == null) ? 0 : (int) trans.get("texCoord");
-                                result.materials.get(m).clearCoat.clearCoatNormalTexture.transform.rotation = (trans.get("rotation") == null) ? 0.0f : (double) trans.get("rotation");
-                                ArrayList<Double> offset = (ArrayList<Double>) trans.get("offset");
-                                if (offset != null) {
-                                    for (int of = 0; of < offset.size(); of++) {
-                                        result.materials.get(m).clearCoat.clearCoatNormalTexture.transform.offset[of] = offset.get(of);
-                                    }
-                                }
-                                ArrayList<Double> scale = (ArrayList<Double>) trans.get("scale");
-                                if (scale != null) {
-                                    for (int sf = 0; sf < scale.size(); sf++) {
-                                        result.materials.get(m).clearCoat.clearCoatNormalTexture.transform.scale[sf] = scale.get(sf);
-                                    }
+                            JsonNode trans = srTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.sheen.sheenRoughnessTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.sheen.sheenRoughnessTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.sheen.sheenRoughnessTexture.transform.offset[off] = offset.get(off).asDouble();
                                 }
                             }
-
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.sheen.sheenRoughnessTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
                         }
                     }
 
-                    Map<String, Object> ior = (Map<String, Object>) materials.get(m).get("ior");
-                    if (ior != null) {
-                        result.materials.get(m).hasIor = true;
-                        result.materials.get(m).ior.ior = (double) ior.get("ior");
+                    JsonNode transmission = material.path("transmission");
+                    if (!transmission.isMissingNode()) {
+                        mat.hasTransmission = true;
+
+                        mat.transmission.transmissionFactor = transmission.path("transmissionFactor").asDouble();
+
+                        JsonNode tTex = transmission.path("transmissionTexture");
+                        if (!tTex.isMissingNode()) {
+                            mat.transmission.transmissionTexture.texture = tTex.path("texture").asInt();
+                            mat.transmission.transmissionTexture.texcoord = tTex.path("texCoord").asInt();
+                            mat.transmission.transmissionTexture.scale = tTex.path("scale").asDouble();
+
+                            JsonNode trans = tTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.transmission.transmissionTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.transmission.transmissionTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.transmission.transmissionTexture.transform.offset[off] = offset.get(off).asDouble();
+                                }
+                            }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.transmission.transmissionTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
+                        }
+
                     }
 
+                    JsonNode volume = material.path("volume");
+                    if (!volume.isMissingNode()) {
+                        mat.hasVolume = true;
+
+                        JsonNode attenuationColor = volume.path("attenuationColor");
+                        if (!attenuationColor.isMissingNode()) {
+                            for (int atc = 0; atc < attenuationColor.size(); atc++) {
+                                mat.volume.attenuationColor[atc] = attenuationColor.get(atc).asDouble();
+                            }
+                        }
+                        mat.volume.thicknessFactor = volume.path("thicknessFactor").asDouble();
+                        mat.volume.attenuationDistance = volume.path("attenuationDistance").asDouble();
+
+                        JsonNode tTex = volume.path("thicknessTexture");
+                        if (!tTex.isMissingNode()) {
+                            mat.volume.thicknessTexture.texture = tTex.path("texture").asInt();
+                            mat.volume.thicknessTexture.texcoord = tTex.path("texCoord").asInt();
+                            mat.volume.thicknessTexture.scale = tTex.path("scale").asDouble();
+
+                            JsonNode trans = tTex.path("transform");
+                            if (!trans.isMissingNode()) {
+                                mat.volume.thicknessTexture.transform.textcoord = trans.path("texCoord").asInt();
+                                mat.volume.thicknessTexture.transform.rotation = trans.path("rotation").asDouble();
+                            }
+                            JsonNode offset = material.path("offset");
+                            if (!offset.isMissingNode()) {
+                                for (int off = 0; off < offset.size(); off++) {
+                                    mat.volume.thicknessTexture.transform.offset[off] = offset.get(off).asDouble();
+                                }
+                            }
+                            JsonNode scale = material.path("scale");
+                            if (!scale.isMissingNode()) {
+                                for (int sca = 0; sca < scale.size(); sca++) {
+                                    mat.volume.thicknessTexture.transform.scale[sca] = scale.get(sca).asDouble();
+                                }
+                            }
+                        }
+
+                    }
+
+                    result.materials.add(m, mat);
+                    m++;
                 }
-                result.materialCount = materials.size();
+                result.materialCount = m;
             }
 
-            ArrayList<Map> accessors = (ArrayList<Map>) jsonObjects.get("accessors");
-            if (accessors != null) {
-                for (int a = 0; a < accessors.size(); a++) {
+            JsonNode accessors = root.path("accessors");
+            if (!accessors.isMissingNode()) {
+                int a = 0;
+                for (JsonNode accessor : accessors) {
                     result.accessors.add(a, new gltfj_Accessor());
 
-                    result.accessors.get(a).bufferView = (accessors.get(a).get("bufferView") == null) ? 0 : (int) accessors.get(a).get("bufferView");
-                    result.accessors.get(a).byteOffset = (accessors.get(a).get("byteOffset") == null) ? 0 : (int) accessors.get(a).get("byteOffset");
-                    result.accessors.get(a).count = (accessors.get(a).get("count") == null) ? 0 : (int) accessors.get(a).get("count");
+                    result.accessors.get(a).bufferView = accessor.path("bufferView").asInt();
+                    result.accessors.get(a).byteOffset = accessor.path("byteOffset").asInt();
+                    result.accessors.get(a).count = accessor.path("count").asInt();
 
-                    int compType = (accessors.get(a).get("componentType") == null) ? 5120 : (int) accessors.get(a).get("componentType");
+                    String type = accessor.path("type").asText().toUpperCase();
+                    result.accessors.get(a).type = gltfj_Accessor.AccessorType.valueOf(type);
+
+                    int compType =  accessor.path("componentType").asInt();
                     result.accessors.get(a).componentType = gltfj_Accessor.AccessorDataType.values()[compType - 5120];
 
-                    String type = String.valueOf(accessors.get(a).get("type"));
-                    result.accessors.get(a).type = gltfj_Accessor.AccessorType.valueOf(type.toUpperCase());
+                    JsonNode maNode = accessor.path("max");
+                    JsonNode miNode = accessor.path("min");
 
-                    switch (result.accessors.get(a).componentType) {
-                        case SIGNED_BYTE:
-                        case UNSIGNED_BYTE:
-                            result.accessors.get(a).max = (ArrayList<Byte>) accessors.get(a).get("max");
-                            result.accessors.get(a).min = (ArrayList<Byte>) accessors.get(a).get("min");
-                            break;
-                        case SIGNED_SHORT:
-                        case UNSIGNED_SHORT:
-                            result.accessors.get(a).max = (ArrayList<Short>) accessors.get(a).get("max");
-                            result.accessors.get(a).min = (ArrayList<Short>) accessors.get(a).get("min");
-                            break;
-                        case UNSIGNED_INT:
-                            result.accessors.get(a).max = (ArrayList<Integer>) accessors.get(a).get("max");
-                            result.accessors.get(a).min = (ArrayList<Integer>) accessors.get(a).get("min");
-                            break;
-                        case FLOAT:
-                            result.accessors.get(a).max = (ArrayList<Float>) accessors.get(a).get("max");
-                            result.accessors.get(a).min = (ArrayList<Float>) accessors.get(a).get("min");
-                            break;
+                    for (int i = 0; i < maNode.size() || i < miNode.size(); i++) {
+                        switch (result.accessors.get(a).componentType) {
+                            case SIGNED_BYTE:
+                            case UNSIGNED_BYTE:
+                            case UNSIGNED_INT:
+                            case SIGNED_SHORT:
+                            case UNSIGNED_SHORT:
+                                result.accessors.get(a).max.add(maNode.get(i).asInt());
+                                result.accessors.get(a).min.add(miNode.get(i).asInt());
+                                break;
+                            case FLOAT:
+                                result.accessors.get(a).max.add(maNode.get(i).asDouble());
+                                result.accessors.get(a).min.add(miNode.get(i).asDouble());
+                                break;
+                        }
                     }
 
-                    // TODO: 8/11/23 Sparse Accessors
+                    // TODO: 8/20/23 Sparse Accessors
 
+                    a++;
                 }
-                result.accessorCount = result.accessors.size();
+                result.accessorCount = a;
             }
 
-            ArrayList<Map> bufferViews = (ArrayList<Map>) jsonObjects.get("bufferViews");
-            if (bufferViews != null) {
-                for (int bv = 0; bv < bufferViews.size(); bv++) {
-                    result.bufferViews.add(bv, new gltfj_BufferView());
+            JsonNode bufferViews = root.path("bufferViews");
+            if (!bufferViews.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : bufferViews) {
+                    result.bufferViews.add(i, new gltfj_BufferView());
 
-                    result.bufferViews.get(bv).name = String.valueOf(bufferViews.get(bv).get("name"));
-                    result.bufferViews.get(bv).buffer = (bufferViews.get(bv).get("buffer") == null) ? 0 : (int) bufferViews.get(bv).get("buffer");
-                    result.bufferViews.get(bv).offset = (bufferViews.get(bv).get("offset") == null) ? 0 : (int) bufferViews.get(bv).get("offset");
-                    result.bufferViews.get(bv).size = (bufferViews.get(bv).get("byteLength") == null) ? 1 : (int) bufferViews.get(bv).get("byteLength");
-                    result.bufferViews.get(bv).stride = (bufferViews.get(bv).get("byteStride") == null) ? 4 : (int) bufferViews.get(bv).get("byteStride");
+                    result.bufferViews.get(i).name = node.path("name").asText();
+                    result.bufferViews.get(i).buffer = node.path("buffer").asInt();
+                    result.bufferViews.get(i).offset = node.path("offset").asInt();
+                    result.bufferViews.get(i).size = node.path("byteLength").asInt();
+                    result.bufferViews.get(i).stride = node.path("byteStride").asInt();
 
-                    int tgt = (bufferViews.get(bv).get("target") == null) ? -1 : (int) bufferViews.get(bv).get("target");
+                    int tgt = node.path("target").asInt(-1);
                     if (tgt == 34962) {
-                        result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.ARRAY_BUFFER;
-                    } else if (tgt == 34963) {
-                        result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.ELEMENT_ARRAY_BUFFER;
-                    } else {
-                        result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.INVALID;
+                        result.bufferViews.get(i).target = gltfj_BufferView.BufferViewTarget.ARRAY_BUFFER;
                     }
-
+                    else if (tgt == 34963) {
+                        result.bufferViews.get(i).target = gltfj_BufferView.BufferViewTarget.ELEMENT_ARRAY_BUFFER;
+                    }
+                    else {
+                        result.bufferViews.get(i).target = gltfj_BufferView.BufferViewTarget.INVALID;
+                    }
                 }
-                result.bufferViewCount = result.bufferViews.size();
+                result.bufferViewCount = i;
             }
 
-            ArrayList<Map> buffers = (ArrayList<Map>) jsonObjects.get("buffers");
-            if (buffers != null) {
-                for (int b = 0; b < buffers.size(); b++) {
-                    result.buffers.add(b, new gltfj_Buffer());
-                    result.buffers.get(b).name = String.valueOf(buffers.get(b).get("name"));
-                    result.buffers.get(b).uri = (String) buffers.get(b).get("uri");
-                    result.buffers.get(b).size = (buffers.get(b).get("byteLength") == null) ? -1 : (int) buffers.get(b).get("byteLength");
+            JsonNode buffers = root.path("buffers");
+            if (!buffers.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : buffers) {
+                    result.buffers.add(i, new gltfj_Buffer());
 
-                    if (result.buffers.get(b).uri != null) {
-                        if (result.buffers.get(b).uri.contains("octet-stream;base64")) {
-                            String uri = result.buffers.get(b).uri;
+                    result.buffers.get(i).name = node.path("name").asText();
+                    result.buffers.get(i).uri = node.path("uri").asText();
+                    result.buffers.get(i).size = node.path("byteLength").asInt();
+
+                    if (result.buffers.get(i).uri != null) {
+                        if (result.buffers.get(i).uri.contains("octet-stream;base64")) {
+                            String uri = result.buffers.get(i).uri;
                             String encoded = uri.substring(uri.lastIndexOf(",") + 1);
-                            result.buffers.get(b).data = Base64.getDecoder().decode(encoded);
+                            result.buffers.get(i).data = Base64.getDecoder().decode(encoded);
                         }
                         else {
-                            result.buffers.get(b).data = LoadFileData(filepath + result.buffers.get(b).uri);
+                            result.buffers.get(i).data = LoadFileData(filepath + result.buffers.get(i).uri);
                         }
                     }
                 }
-                result.bufferCount = result.buffers.size();
+                result.bufferCount = i;
             }
 
-            ArrayList<Map> images = (ArrayList<Map>) jsonObjects.get("images");
-            if (images != null) {
-                for (int i = 0; i < images.size(); i++) {
+            JsonNode images = root.path("images");
+            if (!images.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node: images) {
                     result.images.add(i, new gltfj_Image());
 
-                    result.images.get(i).name = String.valueOf(images.get(i).get("name"));
-                    result.images.get(i).uri = String.valueOf(images.get(i).get("uri"));
-                    result.images.get(i).mimeType = String.valueOf(images.get(i).get("mimeType"));
-                    result.images.get(i).bufferView = (images.get(i).get("bufferView") == null) ? -1 : (int) images.get(i).get("bufferView");
+                    result.images.get(i).name = node.path("name").asText();
+                    result.images.get(i).uri = node.path("uri").asText();
+                    result.images.get(i).mimeType = node.path("mimeType").asText();
+                    result.images.get(i).bufferView = node.path("bufferView").asInt();
+
+                    i++;
                 }
-                result.imageCount = result.images.size();
+                result.imageCount = i;
             }
 
-            ArrayList<Map> textures = (ArrayList<Map>) jsonObjects.get("textures");
-            if (textures != null) {
-                for (int t = 0; t < textures.size(); t++) {
-                    result.textures.add(t, new gltfj_Texture());
+            JsonNode textures = root.path("textures");
+            if (!textures.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : textures) {
+                    result.textures.add(i, new gltfj_Texture());
 
-                    result.textures.get(t).image = (int) textures.get(t).get("source");
-                    result.textures.get(t).sampler = (int) textures.get(t).get("sampler");
+                    result.textures.get(i).image = node.path("source").asInt();
+                    result.textures.get(i).sampler = node.path("sampler").asInt();
+
+                    i++;
                 }
-                result.textureCount = result.textures.size();
+                result.textureCount = i;
             }
 
-            ArrayList<Map> samplers = (ArrayList<Map>) jsonObjects.get("samplers");
-            if (samplers != null) {
-                for (int s = 0; s < samplers.size(); s++) {
-                    result.samplers.add(s, new gltfj_Sampler());
+            JsonNode samplers = root.path("samplers");
+            if (!samplers.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : samplers) {
+                    result.samplers.add(i, new gltfj_Sampler());
 
-                    result.samplers.get(s).name = String.valueOf(samplers.get(s).get("name"));
-                    result.samplers.get(s).magFilter = (samplers.get(s).get("magFilter") == null) ? 0 : (int) samplers.get(s).get("magFilter");
-                    result.samplers.get(s).minFilter = (samplers.get(s).get("minFilter") == null) ? 0 : (int) samplers.get(s).get("minFilter");
-                    result.samplers.get(s).sWrap = (samplers.get(s).get("wrapS") == null) ? 0 : (int) samplers.get(s).get("wrapS");
-                    result.samplers.get(s).tWrap = (samplers.get(s).get("wrapT") == null) ? 0 : (int) samplers.get(s).get("wrapT");
+                    result.samplers.get(i).name = node.path("name").asText();
+                    result.samplers.get(i).magFilter = node.path("magFilter").asInt();
+                    result.samplers.get(i).minFilter = node.path("minFilter").asInt();
+                    result.samplers.get(i).sWrap = node.path("wrapS").asInt();
+                    result.samplers.get(i).tWrap = node.path("wrapT").asInt();
+
+                    i++;
                 }
-                result.samplerCount = result.samplers.size();
+                result.samplerCount = i;
             }
 
-            ArrayList<Map> skins = (ArrayList<Map>) jsonObjects.get("skins");
-            if (skins != null) {
-                for (int s = 0; s < skins.size(); s++) {
-                    result.skins.add(s, new gltfj_Skin());
-                    result.skins.get(s).name = (String) skins.get(s).get("name");
-                    result.skins.get(s).inverseBindMatrices = (skins.get(s).get("inverseBindMatricies") == null) ? -1 : (int) skins.get(s).get("inverseBindMatricies");
-                    result.skins.get(s).skeleton = (skins.get(s).get("skeleton") == null) ? -1 : (int) skins.get(s).get("skeleton");
+            JsonNode skins = root.path("skins");
+            if (!skins.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : skins) {
+                    result.skins.add(i, new gltfj_Skin());
 
-                    ArrayList<Integer> s_joints = (ArrayList<Integer>) skins.get(s).get("joints");
-                    if (s_joints != null) {
-                        result.skins.get(s).joints = new int[s_joints.size()];
-                        for (int j = 0; j < s_joints.size(); j++) {
-                            result.skins.get(s).joints[j] = s_joints.get(j);
+                    result.skins.get(i).name = node.path("name").asText();
+                    result.skins.get(i).inverseBindMatrices = node.path("inverseBindMatrices").asInt();
+                    result.skins.get(i).skeleton = node.path("skeleton").asInt();
+
+                    //todo joints
+                    JsonNode joints = node.path("joints");
+                    if (!joints.isMissingNode()) {
+                        int j = 0;
+                        result.skins.get(i).joints = new int[joints.size()];
+                        for (JsonNode joint : joints) {
+                            result.skins.get(i).joints[j] = joint.get(j).asInt();
                         }
-                        result.skins.get(s).jointsCount = s_joints.size();
-                    }
-
-                }
-                result.skinCount = result.skins.size();
-            }
-
-            ArrayList<Map> cameras = (ArrayList<Map>) jsonObjects.get("cameras");
-            if (cameras != null) {
-                for (int c = 0; c < cameras.size(); c++) {
-                    result.cameras.add(c, new gltfj_Camera());
-
-                    result.cameras.get(c).name = String.valueOf(cameras.get(c).get("name"));
-                    result.cameras.get(c).type = gltfj_Camera.CameraType.valueOf(String.valueOf(cameras.get(c).get("type")));
-                    if (result.cameras.get(c).type == gltfj_Camera.CameraType.ORTHOGRAPHIC) {
-                        result.cameras.get(c).data_o = new gltfj_CameraOrthographic();
-                        result.cameras.get(c).orthographic = true;
-
-                        Map<String, Object> camo = (Map<String, Object>) cameras.get(c).get("orthographic");
-                        result.cameras.get(c).data_o.x_mag = (camo.get("xmag") == null) ? 0.0f : (double) camo.get("xmag");
-                        result.cameras.get(c).data_o.y_mag = (camo.get("ymag") == null) ? 0.0f : (double) camo.get("ymag");
-                        result.cameras.get(c).data_o.z_far = (camo.get("zfar") == null) ? 0.0f : (double) camo.get("zfar");
-                        result.cameras.get(c).data_o.z_near = (camo.get("znear") == null) ? 0.0f : (double) camo.get("znear");
-                    } else {
-                        // assume perspective
-                        result.cameras.get(c).data_p = new gltfj_CameraPerspective();
-                        result.cameras.get(c).perspective = true;
-
-                        Map<String, Object> camp = (Map<String, Object>) cameras.get(c).get("perspective");
-                        result.cameras.get(c).data_p.aspectRatio = (camp.get("aspectRatio") == null) ? 0.0f : (double) camp.get("aspectRatio");
-                        result.cameras.get(c).data_p.y_fov = (camp.get("yfov") == null) ? 0.0f : (double) camp.get("yfov");
-                        result.cameras.get(c).data_p.z_far = (camp.get("zfar") == null) ? 0.0f : (double) camp.get("zfar");
-                        result.cameras.get(c).data_p.z_near = (camp.get("znear") == null) ? 0.0f : (double) camp.get("znear");
+                        result.skins.get(i).jointsCount = j;
                     }
                 }
-                result.cameraCount = cameras.size();
+                result.skinCount = i;
             }
 
-            ArrayList<Map> lights = (ArrayList<Map>) jsonObjects.get("lights");
-            if (lights != null) {
-                for (int l = 0; l < lights.size(); l++) {
-                    result.lights.add(l, new gltfj_Light());
+            JsonNode cameras = root.path("cameras");
+            if (!cameras.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : cameras) {
+                    result.cameras.add(i, new gltfj_Camera());
 
-                    result.lights.get(l).name = String.valueOf(lights.get(l).get("name"));
-                    result.lights.get(l).intensity = (lights.get(l).get("intensity") == null) ? 0.0f : (double) lights.get(l).get("intensity");
-                    result.lights.get(l).range = (lights.get(l).get("range") == null) ? 0.0f : (double) lights.get(l).get("range");
-                    result.lights.get(l).spot_InnerConeAngle = (lights.get(l).get("innerConeAngle") == null) ? 0.0f : (double) lights.get(l).get("innerConeAngle");
-                    result.lights.get(l).spot_OuterConeAngle = (lights.get(l).get("outerConeAngle") == null) ? 0.0f : (double) lights.get(l).get("outerConeAngle");
-                    result.lights.get(l).type = (lights.get(l).get("type") == null) ? INVALID : gltfj_Light.LightType.valueOf(String.valueOf(lights.get(l).get("type")));
+                    result.cameras.get(i).name = node.path("name").asText();
+                    result.cameras.get(i).type = gltfj_Camera.CameraType.valueOf(node.path("type").asText().toUpperCase());
 
-                    ArrayList<Float> colour = (ArrayList<Float>) lights.get(l).get("color");
-                    if (colour != null) {
-                        for (int cf = 0; cf < colour.size(); cf++) {
-                            result.lights.get(l).color[cf] = colour.get(cf);
-                        }
+                    if (result.cameras.get(i).type == gltfj_Camera.CameraType.ORTHOGRAPHIC) {
+                        result.cameras.get(i).data_o = new gltfj_CameraOrthographic();
+                        result.cameras.get(i).orthographic = true;
+
+                        JsonNode orth = node.path("orthographic");
+                        result.cameras.get(i).data_o.x_mag = orth.path("xmag").asDouble();
+                        result.cameras.get(i).data_o.y_mag =  orth.path("ymag").asDouble();
+                        result.cameras.get(i).data_o.z_far =  orth.path("zfar").asDouble();
+                        result.cameras.get(i).data_o.z_near = orth.path("znear").asDouble();
+
+                    }
+                    else {
+                        //assume perspective
+                        result.cameras.get(i).data_p = new gltfj_CameraPerspective();
+                        result.cameras.get(i).perspective = true;
+
+                        JsonNode pers = node.path("perspective");
+                        result.cameras.get(i).data_p.aspectRatio = pers.path("aspectRatio").asDouble();
+                        result.cameras.get(i).data_p.y_fov = pers.path("yfov").asDouble();
+                        result.cameras.get(i).data_p.z_far = pers.path("zfar").asDouble();
+                        result.cameras.get(i).data_p.z_near = pers.path("znear").asDouble();
                     }
                 }
-                result.lightCount = lights.size();
+                result.cameraCount = i;
             }
 
-            ArrayList<Map> nodes = (ArrayList<Map>) jsonObjects.get("nodes");
-            if (nodes != null) {
-                for (int n = 0; n < nodes.size(); n++) {
-                    result.nodes.add(n, new gltfj_Node());
+            JsonNode lights = root.path("lights");
+            if (!lights.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : lights) {
+                    result.lights.add(i, new gltfj_Light());
 
-                    result.nodes.get(n).name = (String) nodes.get(n).get("name");
-                    result.nodes.get(n).skin = (nodes.get(n).get("skin") == null) ? -1 : (int) nodes.get(n).get("skin");
-                    result.nodes.get(n).mesh = (nodes.get(n).get("mesh") == null) ? -1 : (int) nodes.get(n).get("mesh");
-                    result.nodes.get(n).camera = (nodes.get(n).get("camera") == null) ? -1 : (int) nodes.get(n).get("camera");
-                    result.nodes.get(n).light = (nodes.get(n).get("light") == null) ? -1 : (int) nodes.get(n).get("light");
-                    result.nodes.get(n).parent = (nodes.get(n).get("parent") == null) ? -1 : (int) nodes.get(n).get("parent");
-                    ArrayList<Double> rot = (ArrayList<Double>) nodes.get(n).get("rotation");
-                    if (rot != null) {
-                        for (int rotf = 0; rotf < rot.size(); rotf++) {
-                            result.nodes.get(n).rotation[rotf] = rot.get(rotf);
-                        }
-                    }
+                    result.lights.get(i).name = node.path("name").asText();
+                    result.lights.get(i).intensity = node.path("intensity").asDouble();
+                    result.lights.get(i).range = node.path("range").asDouble();
+                    result.lights.get(i).spot_InnerConeAngle = node.path("innerConeAngle").asDouble();
+                    result.lights.get(i).spot_OuterConeAngle = node.path("outerConeAngle").asDouble();
+                    result.lights.get(i).type = gltfj_Light.LightType.valueOf(node.path("type").asText("INVALID").toUpperCase());
 
-                    ArrayList<Double> sca = (ArrayList<Double>) nodes.get(n).get("scale");
-                    if (sca != null) {
-                        for (int scaf = 0; scaf < sca.size(); scaf++) {
-                            result.nodes.get(n).scale[scaf] = sca.get(scaf);
-                        }
-                    }
-                    ArrayList<Double> trans = (ArrayList<Double>) nodes.get(n).get("translation");
-                    if (trans != null) {
-                        for (int transf = 0; transf < trans.size(); transf++) {
-                            result.nodes.get(n).rotation[transf] = trans.get(transf);
-                        }
-                    }
-                    ArrayList<Double> mat = (ArrayList<Double>) nodes.get(n).get("matrix");
-                    if (mat != null) {
-                        for (int matf = 0; matf < mat.size(); matf++) {
-                            result.nodes.get(n).matrix[matf] = mat.get(matf);
-                        }
-                    }
-                    ArrayList<Double> wei = (ArrayList<Double>) nodes.get(n).get("weights");
-                    if (wei != null) {
-                        result.nodes.get(n).weights = new double[wei.size()];
-                        for (int weif = 0; weif < wei.size(); weif++) {
-                            result.nodes.get(n).weights[weif] = wei.get(weif);
-                        }
-                        result.nodes.get(n).weightsCount = wei.size();
-                    }
-                    ArrayList<Integer> chi = (ArrayList<Integer>) nodes.get(n).get("children");
-                    if (chi != null) {
-                        result.nodes.get(n).children = new int[chi.size()];
-                        for (int c = 0; c < chi.size(); c++) {
-                            result.nodes.get(n).weights[c] = chi.get(c);
-                        }
-                        result.nodes.get(n).childrenCount = chi.size();
+                    JsonNode colour = node.path("color");
+                    result.lights.get(i).color = new double[colour.size()];
+                    for (int j = 0; j < colour.size(); j++) {
+                        result.lights.get(i).color[j] = colour.get(j).asDouble();
                     }
                 }
-                result.nodeCount = result.nodes.size();
+                result.lightCount = i;
             }
 
-            result.scene = (int) jsonObjects.get("scene");
+            JsonNode nodes = root.path("nodes");
+            if (!nodes.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : nodes) {
+                    result.nodes.add(i, new gltfj_Node());
 
-            ArrayList<Map> scenes = (ArrayList<Map>) jsonObjects.get("scenes");
-            if (scenes != null) {
-                for (int s = 0; s < scenes.size(); s++) {
-                    result.scenes.add(s, new gltfj_Scene());
-                    result.scenes.get(s).name = String.valueOf(scenes.get(s).get("name"));
-                    ArrayList<Integer> snodes = (ArrayList<Integer>) scenes.get(s).get("nodes");
-                    result.scenes.get(s).nodes = new int[nodes.size()];
-                    for (int n = 0; n < nodes.size(); n++) {
-                        result.scenes.get(s).nodes[n] = snodes.get(n);
+                    result.nodes.get(i).name = node.path("name").asText();
+                    result.nodes.get(i).skin = node.path("skin").asInt(0);
+                    result.nodes.get(i).mesh = node.path("mesh").asInt(0);
+                    result.nodes.get(i).camera = node.path("camera").asInt(0);
+                    result.nodes.get(i).light = node.path("light").asInt(0);
+                    result.nodes.get(i).parent = node.path("parent").asInt(0);
+
+                    JsonNode rot = root.path("rotation");
+                    result.nodes.get(i).rotation = new double[rot.size()];
+                    for (int j = 0; j < rot.size(); j++) {
+                        result.nodes.get(i).rotation[j] = rot.get(j).asDouble();
                     }
-                    result.scenes.get(s).nodeCount = result.scenes.get(s).nodes.length;
+                    result.nodes.get(i).childrenCount = rot.size();
+
+                    JsonNode sca = root.path("scale");
+                    result.nodes.get(i).scale = new double[sca.size()];
+                    for (int j = 0; j < sca.size(); j++) {
+                        result.nodes.get(i).rotation[j] = sca.get(j).asDouble();
+                    }
+                    result.nodes.get(i).childrenCount = sca.size();
+
+                    JsonNode trans = root.path("translation");
+                    result.nodes.get(i).translation = new double[trans.size()];
+                    for (int j = 0; j < trans.size(); j++) {
+                        result.nodes.get(i).rotation[j] = trans.get(j).asDouble();
+                    }
+                    result.nodes.get(i).childrenCount = trans.size();
+
+                    JsonNode mat = root.path("matrix");
+                    result.nodes.get(i).matrix = new double[mat.size()];
+                    for (int j = 0; j < mat.size(); j++) {
+                        result.nodes.get(i).rotation[j] = mat.get(j).asDouble();
+                    }
+                    result.nodes.get(i).childrenCount = mat.size();
+
+                    JsonNode wei = root.path("weights");
+                    result.nodes.get(i).weights = new double[wei.size()];
+                    for (int j = 0; j < wei.size(); j++) {
+                        result.nodes.get(i).rotation[j] = wei.get(j).asDouble();
+                    }
+                    result.nodes.get(i).childrenCount = wei.size();
+
+                    JsonNode chi = root.path("children");
+                    result.nodes.get(i).children = new int[chi.size()];
+                    for (int j = 0; j < chi.size(); j++) {
+                        result.nodes.get(i).rotation[j] = chi.get(j).asInt();
+                    }
+                    result.nodes.get(i).childrenCount = chi.size();
+
                 }
-                result.sceneCount = result.scenes.size();
+                result.nodeCount = i;
             }
 
-            ArrayList<Map> animations = (ArrayList<Map>) jsonObjects.get("animations");
-            if (animations != null) {
-                for (int a = 0; a < animations.size(); a++) {
-                    result.animations.add(a, new gltfj_Animation());
-                    result.animations.get(a).name = String.valueOf(animations.get(a).get("name"));
+            result.scene = root.path("scene").asInt();
 
-                    ArrayList<Map> channels = (ArrayList<Map>) animations.get(a).get("channels");
-                    if (channels != null) {
-                        for (int c = 0; c < channels.size(); c++) {
-                            result.animations.get(a).channels.add(c, new gltfj_AnimationChannel());
-                            result.animations.get(a).channels.get(c).sampler = (channels.get(c).get("sampler") == null) ? 0 : (int) channels.get(c).get("sampler");
-                            Map<String, Object> target = (Map<String, Object>) channels.get(c).get("target");
-                            result.animations.get(a).channels.get(c).targetNode = (target.get("node") == null) ? -1 : (int) target.get("node");
-                            result.animations.get(a).channels.get(c).targetPath = (target.get("path") == null) ? gltfj_AnimationChannel.AnimationPathType.INVALID : gltfj_AnimationChannel.AnimationPathType.valueOf(String.valueOf(target.get("path")).toUpperCase());
-                        }
-                        result.animations.get(a).channelCount = channels.size();
-                    }
+            JsonNode scenes = root.path("scenes");
+            if (!scenes.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : scenes) {
+                    result.scenes.add(i, new gltfj_Scene());
 
-                    ArrayList<Map> aSamplers = (ArrayList<Map>) animations.get(a).get("samplers");
-                    if (aSamplers != null) {
-                        for (int s = 0; s < aSamplers.size(); s++) {
-                            result.animations.get(a).samplers.add(s, new gltfj_AnimationSampler());
-
-                            result.animations.get(a).samplers.get(a).input = (aSamplers.get(s).get("input") == null) ? 0 : (int) aSamplers.get(s).get("input");
-                            result.animations.get(a).samplers.get(a).output = (aSamplers.get(s).get("output") == null) ? 0 : (int) aSamplers.get(s).get("output");
-                            result.animations.get(a).samplers.get(a).interpolation = (aSamplers.get(s).get("interpolation") == null) ? gltfj_AnimationSampler.InterpolationType.LINEAR : gltfj_AnimationSampler.InterpolationType.valueOf(String.valueOf(aSamplers.get(s).get("interpolation")).toUpperCase());
-                        }
-                        result.animations.get(a).samplerCount = aSamplers.size();
+                    result.scenes.get(i).name = node.path("name").asText();
+                    JsonNode sNode = root.path("nodes");
+                    result.scenes.get(i).nodes = new int[sNode.size()];
+                    for (int j = 0; j < sNode.size(); j++) {
+                        result.scenes.get(i).nodes[j] = sNode.get(j).asInt();
                     }
                 }
-                result.animationCount = animations.size();
+                result.sceneCount = i;
             }
 
-            // TODO: 8/15/23
-            ArrayList<Map> materialVariants = (ArrayList<Map>) jsonObjects.get("materialVariants");
+            JsonNode animations = root.path("animations");
+            if (!animations.isMissingNode()) {
+                int i = 0;
+                for (JsonNode node : animations) {
+                    result.animations.add(i, new gltfj_Animation());
 
-            // TODO: 8/15/23
-            ArrayList<Map> extensions = (ArrayList<Map>) jsonObjects.get("extensions");
+                    result.animations.get(i).name = node.path("name").asText();
+
+                    JsonNode channels = node.path("channels");
+                    if (!channels.isMissingNode()) {
+                        int c = 0;
+                        for (JsonNode channel : channels) {
+                            result.animations.get(i).channels.add(c, new gltfj_AnimationChannel());
+                            result.animations.get(i).channels.get(c).sampler = channel.path("sampler").asInt(0);
+                            result.animations.get(i).channels.get(c).targetNode = channel.path("target").path("node").asInt();
+                            result.animations.get(i).channels.get(c).targetPath = gltfj_AnimationChannel.AnimationPathType.valueOf(channel.path("target").path("path").asText("INVALID").toUpperCase());
+
+                            c++;
+                        }
+                        result.animations.get(i).channelCount = i;
+                    }
+
+                    JsonNode aSamplers = node.path("samplers");
+                    if (!samplers.isMissingNode()) {
+                        int s = 0;
+                        for (JsonNode sampler : samplers) {
+                            result.animations.get(i).samplers.add(s, new gltfj_AnimationSampler());
+
+                            result.animations.get(i).samplers.get(s).input = sampler.path("").asInt();
+                            result.animations.get(i).samplers.get(s).output = sampler.path("").asInt();
+                            result.animations.get(i).samplers.get(s).interpolation = gltfj_AnimationSampler.InterpolationType.valueOf(sampler.path("").asText().toUpperCase());
+                        }
+                        result.animations.get(i).samplerCount = s;
+                    }
+                }
+                result.animationCount = i;
+            }
+
+            JsonNode materialVariants = root.path("materialVariants");
+            if (!materialVariants.isMissingNode()) {
+                // TODO: 8/20/23 materialVariants
+            }
+
+            JsonNode extensions = root.path("extensions");
+            if (!extensions.isMissingNode()) {
+                // TODO: 8/20/23 extensions
+            }
 
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
 
 
@@ -973,7 +1103,7 @@ public class gltfj {
         }
         if (magic[0] != 'g'|| magic[1] != 'l' || magic[2] != 'T' || magic[3] != 'F') {
             System.out.println("[glTF-J] Error: File failed checksum. Invalid binary data.");
-            return null;
+            return result;
         }
 
         int version;

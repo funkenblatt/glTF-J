@@ -16,5 +16,12 @@ public class gltfj_Accessor {
     public ArrayList max, min;
     public AccessorDataType componentType;
     public AccessorType type;
+    public gltfj_SparseAccessor sparse;
+
+    public gltfj_Accessor() {
+        max = new ArrayList<>();
+        min = new ArrayList<>();
+        sparse = new gltfj_SparseAccessor();
+    }
 
 }

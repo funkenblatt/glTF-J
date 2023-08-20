@@ -12,8 +12,13 @@ import java.util.ArrayList;
 
 public class gltfj_glTF {
 
+    public enum FileType {
+        INVALID, GLTF, GLB
+    }
+
     public int scene, meshCount, materialCount, accessorCount, bufferViewCount, bufferCount, imageCount, textureCount,
             samplerCount, skinCount, cameraCount, lightCount, nodeCount, sceneCount, animationCount, materialVariantCount, extensionCount;
+
     public gltfj_Asset asset;
 
     public ArrayList<gltfj_Mesh> meshes;
@@ -35,6 +40,8 @@ public class gltfj_glTF {
     public ArrayList<String> extensionsUsed, extensionsRequired;
 
     public gltfj_Extras extras;
+
+    public FileType fileType;
 
     public gltfj_glTF() {
         asset = new gltfj_Asset();
