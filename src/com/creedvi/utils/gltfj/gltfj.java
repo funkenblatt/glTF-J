@@ -14,6 +14,7 @@ import com.creedvi.utils.gltfj.gltf.mesh.gltfj_MorphTarget;
 import com.creedvi.utils.gltfj.gltf.mesh.gltfj_Primitive;
 import com.creedvi.utils.gltfj.gltf.texture.gltfj_Sampler;
 import com.creedvi.utils.gltfj.gltf.texture.gltfj_Texture;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -889,13 +890,12 @@ public class gltfj {
                     result.skins.get(i).inverseBindMatrices = node.path("inverseBindMatrices").asInt();
                     result.skins.get(i).skeleton = node.path("skeleton").asInt();
 
-                    //todo joints
                     JsonNode joints = node.path("joints");
                     if (!joints.isMissingNode()) {
                         int j = 0;
                         result.skins.get(i).joints = new int[joints.size()];
-                        for (JsonNode joint : joints) {
-                            result.skins.get(i).joints[j] = joint.get(j).asInt();
+                        for (; j < joints.size(); j++) {
+                            result.skins.get(i).joints[j] = joints.get(j).asInt();
                         }
                         result.skins.get(i).jointsCount = j;
                     }
