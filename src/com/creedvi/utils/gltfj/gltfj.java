@@ -209,7 +209,6 @@ public class gltfj {
 
             JsonNode materials = root.path("materials");
             if (!materials.isMissingNode()) {
-                // TODO: 8/20/23
                 int m = 0;
                 for (JsonNode material : materials) {
                     gltfj_Material mat = new gltfj_Material();
@@ -785,52 +784,53 @@ public class gltfj {
 
             JsonNode bufferViews = root.path("bufferViews");
             if (!bufferViews.isMissingNode()) {
-                int i = 0;
+                int bv = 0;
                 for (JsonNode node : bufferViews) {
-                    result.bufferViews.add(i, new gltfj_BufferView());
+                    result.bufferViews.add(bv, new gltfj_BufferView());
 
-                    result.bufferViews.get(i).name = node.path("name").asText();
-                    result.bufferViews.get(i).buffer = node.path("buffer").asInt();
-                    result.bufferViews.get(i).offset = node.path("offset").asInt();
-                    result.bufferViews.get(i).size = node.path("byteLength").asInt();
-                    result.bufferViews.get(i).stride = node.path("byteStride").asInt();
+                    result.bufferViews.get(bv).name = node.path("name").asText();
+                    result.bufferViews.get(bv).buffer = node.path("buffer").asInt();
+                    result.bufferViews.get(bv).offset = node.path("offset").asInt();
+                    result.bufferViews.get(bv).size = node.path("byteLength").asInt();
+                    result.bufferViews.get(bv).stride = node.path("byteStride").asInt();
 
                     int tgt = node.path("target").asInt(-1);
                     if (tgt == 34962) {
-                        result.bufferViews.get(i).target = gltfj_BufferView.BufferViewTarget.ARRAY_BUFFER;
+                        result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.ARRAY_BUFFER;
                     }
                     else if (tgt == 34963) {
-                        result.bufferViews.get(i).target = gltfj_BufferView.BufferViewTarget.ELEMENT_ARRAY_BUFFER;
+                        result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.ELEMENT_ARRAY_BUFFER;
                     }
                     else {
-                        result.bufferViews.get(i).target = gltfj_BufferView.BufferViewTarget.INVALID;
+                        result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.INVALID;
                     }
                 }
-                result.bufferViewCount = i;
+                result.bufferViewCount = bv;
             }
 
             JsonNode buffers = root.path("buffers");
             if (!buffers.isMissingNode()) {
-                int i = 0;
+                int b = 0;
                 for (JsonNode node : buffers) {
-                    result.buffers.add(i, new gltfj_Buffer());
+                    result.buffers.add(b, new gltfj_Buffer());
 
-                    result.buffers.get(i).name = node.path("name").asText();
-                    result.buffers.get(i).uri = node.path("uri").asText();
-                    result.buffers.get(i).size = node.path("byteLength").asInt();
+                    result.buffers.get(b).name = node.path("name").asText();
+                    result.buffers.get(b).uri = node.path("uri").asText();
+                    result.buffers.get(b).size = node.path("byteLength").asInt();
 
-                    if (result.buffers.get(i).uri != null) {
-                        if (result.buffers.get(i).uri.contains("octet-stream;base64")) {
-                            String uri = result.buffers.get(i).uri;
+                    if (result.buffers.get(b).uri != null) {
+                        if (result.buffers.get(b).uri.contains("octet-stream;base64")) {
+                            String uri = result.buffers.get(b).uri;
                             String encoded = uri.substring(uri.lastIndexOf(",") + 1);
-                            result.buffers.get(i).data = Base64.getDecoder().decode(encoded);
+                            result.buffers.get(b).data = Base64.getDecoder().decode(encoded);
                         }
                         else {
-                            result.buffers.get(i).data = LoadFileData(filepath + result.buffers.get(i).uri);
+                            result.buffers.get(b).data = LoadFileData(filepath + result.buffers.get(b).uri);
                         }
                     }
+                    b++;
                 }
-                result.bufferCount = i;
+                result.bufferCount = b;
             }
 
             JsonNode images = root.path("images");
@@ -851,228 +851,228 @@ public class gltfj {
 
             JsonNode textures = root.path("textures");
             if (!textures.isMissingNode()) {
-                int i = 0;
+                int t = 0;
                 for (JsonNode node : textures) {
-                    result.textures.add(i, new gltfj_Texture());
+                    result.textures.add(t, new gltfj_Texture());
 
-                    result.textures.get(i).image = node.path("source").asInt();
-                    result.textures.get(i).sampler = node.path("sampler").asInt();
+                    result.textures.get(t).image = node.path("source").asInt();
+                    result.textures.get(t).sampler = node.path("sampler").asInt();
 
-                    i++;
+                    t++;
                 }
-                result.textureCount = i;
+                result.textureCount = t;
             }
 
             JsonNode samplers = root.path("samplers");
             if (!samplers.isMissingNode()) {
-                int i = 0;
+                int s = 0;
                 for (JsonNode node : samplers) {
-                    result.samplers.add(i, new gltfj_Sampler());
+                    result.samplers.add(s, new gltfj_Sampler());
 
-                    result.samplers.get(i).name = node.path("name").asText();
-                    result.samplers.get(i).magFilter = node.path("magFilter").asInt();
-                    result.samplers.get(i).minFilter = node.path("minFilter").asInt();
-                    result.samplers.get(i).sWrap = node.path("wrapS").asInt();
-                    result.samplers.get(i).tWrap = node.path("wrapT").asInt();
+                    result.samplers.get(s).name = node.path("name").asText();
+                    result.samplers.get(s).magFilter = node.path("magFilter").asInt();
+                    result.samplers.get(s).minFilter = node.path("minFilter").asInt();
+                    result.samplers.get(s).sWrap = node.path("wrapS").asInt();
+                    result.samplers.get(s).tWrap = node.path("wrapT").asInt();
 
-                    i++;
+                    s++;
                 }
-                result.samplerCount = i;
+                result.samplerCount = s;
             }
 
             JsonNode skins = root.path("skins");
             if (!skins.isMissingNode()) {
-                int i = 0;
+                int s = 0;
                 for (JsonNode node : skins) {
-                    result.skins.add(i, new gltfj_Skin());
+                    result.skins.add(s, new gltfj_Skin());
 
-                    result.skins.get(i).name = node.path("name").asText();
-                    result.skins.get(i).inverseBindMatrices = node.path("inverseBindMatrices").asInt();
-                    result.skins.get(i).skeleton = node.path("skeleton").asInt();
+                    result.skins.get(s).name = node.path("name").asText();
+                    result.skins.get(s).inverseBindMatrices = node.path("inverseBindMatrices").asInt();
+                    result.skins.get(s).skeleton = node.path("skeleton").asInt();
 
                     JsonNode joints = node.path("joints");
                     if (!joints.isMissingNode()) {
                         int j = 0;
-                        result.skins.get(i).joints = new int[joints.size()];
+                        result.skins.get(s).joints = new int[joints.size()];
                         for (; j < joints.size(); j++) {
-                            result.skins.get(i).joints[j] = joints.get(j).asInt();
+                            result.skins.get(s).joints[j] = joints.get(j).asInt();
                         }
-                        result.skins.get(i).jointsCount = j;
+                        result.skins.get(s).jointsCount = j;
                     }
                 }
-                result.skinCount = i;
+                result.skinCount = s;
             }
 
             JsonNode cameras = root.path("cameras");
             if (!cameras.isMissingNode()) {
-                int i = 0;
+                int c = 0;
                 for (JsonNode node : cameras) {
-                    result.cameras.add(i, new gltfj_Camera());
+                    result.cameras.add(c, new gltfj_Camera());
 
-                    result.cameras.get(i).name = node.path("name").asText();
-                    result.cameras.get(i).type = gltfj_Camera.CameraType.valueOf(node.path("type").asText().toUpperCase());
+                    result.cameras.get(c).name = node.path("name").asText();
+                    result.cameras.get(c).type = gltfj_Camera.CameraType.valueOf(node.path("type").asText().toUpperCase());
 
-                    if (result.cameras.get(i).type == gltfj_Camera.CameraType.ORTHOGRAPHIC) {
-                        result.cameras.get(i).data_o = new gltfj_CameraOrthographic();
-                        result.cameras.get(i).orthographic = true;
+                    if (result.cameras.get(c).type == gltfj_Camera.CameraType.ORTHOGRAPHIC) {
+                        result.cameras.get(c).data_o = new gltfj_CameraOrthographic();
+                        result.cameras.get(c).orthographic = true;
 
                         JsonNode orth = node.path("orthographic");
-                        result.cameras.get(i).data_o.x_mag = orth.path("xmag").asDouble();
-                        result.cameras.get(i).data_o.y_mag =  orth.path("ymag").asDouble();
-                        result.cameras.get(i).data_o.z_far =  orth.path("zfar").asDouble();
-                        result.cameras.get(i).data_o.z_near = orth.path("znear").asDouble();
+                        result.cameras.get(c).data_o.x_mag = orth.path("xmag").asDouble();
+                        result.cameras.get(c).data_o.y_mag =  orth.path("ymag").asDouble();
+                        result.cameras.get(c).data_o.z_far =  orth.path("zfar").asDouble();
+                        result.cameras.get(c).data_o.z_near = orth.path("znear").asDouble();
 
                     }
                     else {
                         //assume perspective
-                        result.cameras.get(i).data_p = new gltfj_CameraPerspective();
-                        result.cameras.get(i).perspective = true;
+                        result.cameras.get(c).data_p = new gltfj_CameraPerspective();
+                        result.cameras.get(c).perspective = true;
 
                         JsonNode pers = node.path("perspective");
-                        result.cameras.get(i).data_p.aspectRatio = pers.path("aspectRatio").asDouble();
-                        result.cameras.get(i).data_p.y_fov = pers.path("yfov").asDouble();
-                        result.cameras.get(i).data_p.z_far = pers.path("zfar").asDouble();
-                        result.cameras.get(i).data_p.z_near = pers.path("znear").asDouble();
+                        result.cameras.get(c).data_p.aspectRatio = pers.path("aspectRatio").asDouble();
+                        result.cameras.get(c).data_p.y_fov = pers.path("yfov").asDouble();
+                        result.cameras.get(c).data_p.z_far = pers.path("zfar").asDouble();
+                        result.cameras.get(c).data_p.z_near = pers.path("znear").asDouble();
                     }
                 }
-                result.cameraCount = i;
+                result.cameraCount = c;
             }
 
             JsonNode lights = root.path("lights");
             if (!lights.isMissingNode()) {
-                int i = 0;
+                int l = 0;
                 for (JsonNode node : lights) {
-                    result.lights.add(i, new gltfj_Light());
+                    result.lights.add(l, new gltfj_Light());
 
-                    result.lights.get(i).name = node.path("name").asText();
-                    result.lights.get(i).intensity = node.path("intensity").asDouble();
-                    result.lights.get(i).range = node.path("range").asDouble();
-                    result.lights.get(i).spot_InnerConeAngle = node.path("innerConeAngle").asDouble();
-                    result.lights.get(i).spot_OuterConeAngle = node.path("outerConeAngle").asDouble();
-                    result.lights.get(i).type = gltfj_Light.LightType.valueOf(node.path("type").asText("INVALID").toUpperCase());
+                    result.lights.get(l).name = node.path("name").asText();
+                    result.lights.get(l).intensity = node.path("intensity").asDouble();
+                    result.lights.get(l).range = node.path("range").asDouble();
+                    result.lights.get(l).spot_InnerConeAngle = node.path("innerConeAngle").asDouble();
+                    result.lights.get(l).spot_OuterConeAngle = node.path("outerConeAngle").asDouble();
+                    result.lights.get(l).type = gltfj_Light.LightType.valueOf(node.path("type").asText("INVALID").toUpperCase());
 
                     JsonNode colour = node.path("color");
-                    result.lights.get(i).color = new double[colour.size()];
+                    result.lights.get(l).color = new double[colour.size()];
                     for (int j = 0; j < colour.size(); j++) {
-                        result.lights.get(i).color[j] = colour.get(j).asDouble();
+                        result.lights.get(l).color[j] = colour.get(j).asDouble();
                     }
                 }
-                result.lightCount = i;
+                result.lightCount = l;
             }
 
             JsonNode nodes = root.path("nodes");
             if (!nodes.isMissingNode()) {
-                int i = 0;
+                int n = 0;
                 for (JsonNode node : nodes) {
-                    result.nodes.add(i, new gltfj_Node());
+                    result.nodes.add(n, new gltfj_Node());
 
-                    result.nodes.get(i).name = node.path("name").asText();
-                    result.nodes.get(i).skin = node.path("skin").asInt(0);
-                    result.nodes.get(i).mesh = node.path("mesh").asInt(0);
-                    result.nodes.get(i).camera = node.path("camera").asInt(0);
-                    result.nodes.get(i).light = node.path("light").asInt(0);
-                    result.nodes.get(i).parent = node.path("parent").asInt(0);
+                    result.nodes.get(n).name = node.path("name").asText();
+                    result.nodes.get(n).skin = node.path("skin").asInt(0);
+                    result.nodes.get(n).mesh = node.path("mesh").asInt(0);
+                    result.nodes.get(n).camera = node.path("camera").asInt(0);
+                    result.nodes.get(n).light = node.path("light").asInt(0);
+                    result.nodes.get(n).parent = node.path("parent").asInt(0);
 
                     JsonNode rot = root.path("rotation");
-                    result.nodes.get(i).rotation = new double[rot.size()];
+                    result.nodes.get(n).rotation = new double[rot.size()];
                     for (int j = 0; j < rot.size(); j++) {
-                        result.nodes.get(i).rotation[j] = rot.get(j).asDouble();
+                        result.nodes.get(n).rotation[j] = rot.get(j).asDouble();
                     }
-                    result.nodes.get(i).childrenCount = rot.size();
+                    result.nodes.get(n).childrenCount = rot.size();
 
                     JsonNode sca = root.path("scale");
-                    result.nodes.get(i).scale = new double[sca.size()];
+                    result.nodes.get(n).scale = new double[sca.size()];
                     for (int j = 0; j < sca.size(); j++) {
-                        result.nodes.get(i).rotation[j] = sca.get(j).asDouble();
+                        result.nodes.get(n).rotation[j] = sca.get(j).asDouble();
                     }
-                    result.nodes.get(i).childrenCount = sca.size();
+                    result.nodes.get(n).childrenCount = sca.size();
 
                     JsonNode trans = root.path("translation");
-                    result.nodes.get(i).translation = new double[trans.size()];
+                    result.nodes.get(n).translation = new double[trans.size()];
                     for (int j = 0; j < trans.size(); j++) {
-                        result.nodes.get(i).rotation[j] = trans.get(j).asDouble();
+                        result.nodes.get(n).rotation[j] = trans.get(j).asDouble();
                     }
-                    result.nodes.get(i).childrenCount = trans.size();
+                    result.nodes.get(n).childrenCount = trans.size();
 
                     JsonNode mat = root.path("matrix");
-                    result.nodes.get(i).matrix = new double[mat.size()];
+                    result.nodes.get(n).matrix = new double[mat.size()];
                     for (int j = 0; j < mat.size(); j++) {
-                        result.nodes.get(i).rotation[j] = mat.get(j).asDouble();
+                        result.nodes.get(n).rotation[j] = mat.get(j).asDouble();
                     }
-                    result.nodes.get(i).childrenCount = mat.size();
+                    result.nodes.get(n).childrenCount = mat.size();
 
                     JsonNode wei = root.path("weights");
-                    result.nodes.get(i).weights = new double[wei.size()];
+                    result.nodes.get(n).weights = new double[wei.size()];
                     for (int j = 0; j < wei.size(); j++) {
-                        result.nodes.get(i).rotation[j] = wei.get(j).asDouble();
+                        result.nodes.get(n).rotation[j] = wei.get(j).asDouble();
                     }
-                    result.nodes.get(i).childrenCount = wei.size();
+                    result.nodes.get(n).childrenCount = wei.size();
 
                     JsonNode chi = root.path("children");
-                    result.nodes.get(i).children = new int[chi.size()];
+                    result.nodes.get(n).children = new int[chi.size()];
                     for (int j = 0; j < chi.size(); j++) {
-                        result.nodes.get(i).rotation[j] = chi.get(j).asInt();
+                        result.nodes.get(n).rotation[j] = chi.get(j).asInt();
                     }
-                    result.nodes.get(i).childrenCount = chi.size();
+                    result.nodes.get(n).childrenCount = chi.size();
 
                 }
-                result.nodeCount = i;
+                result.nodeCount = n;
             }
 
             result.scene = root.path("scene").asInt();
 
             JsonNode scenes = root.path("scenes");
             if (!scenes.isMissingNode()) {
-                int i = 0;
+                int s = 0;
                 for (JsonNode node : scenes) {
-                    result.scenes.add(i, new gltfj_Scene());
+                    result.scenes.add(s, new gltfj_Scene());
 
-                    result.scenes.get(i).name = node.path("name").asText();
+                    result.scenes.get(s).name = node.path("name").asText();
                     JsonNode sNode = root.path("nodes");
-                    result.scenes.get(i).nodes = new int[sNode.size()];
+                    result.scenes.get(s).nodes = new int[sNode.size()];
                     for (int j = 0; j < sNode.size(); j++) {
-                        result.scenes.get(i).nodes[j] = sNode.get(j).asInt();
+                        result.scenes.get(s).nodes[j] = sNode.get(j).asInt();
                     }
                 }
-                result.sceneCount = i;
+                result.sceneCount = s;
             }
 
             JsonNode animations = root.path("animations");
             if (!animations.isMissingNode()) {
-                int i = 0;
+                int a = 0;
                 for (JsonNode node : animations) {
-                    result.animations.add(i, new gltfj_Animation());
+                    result.animations.add(a, new gltfj_Animation());
 
-                    result.animations.get(i).name = node.path("name").asText();
+                    result.animations.get(a).name = node.path("name").asText();
 
                     JsonNode channels = node.path("channels");
                     if (!channels.isMissingNode()) {
                         int c = 0;
                         for (JsonNode channel : channels) {
-                            result.animations.get(i).channels.add(c, new gltfj_AnimationChannel());
-                            result.animations.get(i).channels.get(c).sampler = channel.path("sampler").asInt(0);
-                            result.animations.get(i).channels.get(c).targetNode = channel.path("target").path("node").asInt();
-                            result.animations.get(i).channels.get(c).targetPath = gltfj_AnimationChannel.AnimationPathType.valueOf(channel.path("target").path("path").asText("INVALID").toUpperCase());
+                            result.animations.get(a).channels.add(c, new gltfj_AnimationChannel());
+                            result.animations.get(a).channels.get(c).sampler = channel.path("sampler").asInt(0);
+                            result.animations.get(a).channels.get(c).targetNode = channel.path("target").path("node").asInt();
+                            result.animations.get(a).channels.get(c).targetPath = gltfj_AnimationChannel.AnimationPathType.valueOf(channel.path("target").path("path").asText("INVALID").toUpperCase());
 
                             c++;
                         }
-                        result.animations.get(i).channelCount = i;
+                        result.animations.get(a).channelCount = a;
                     }
 
                     JsonNode aSamplers = node.path("samplers");
-                    if (!samplers.isMissingNode()) {
+                    if (!aSamplers.isMissingNode()) {
                         int s = 0;
-                        for (JsonNode sampler : samplers) {
-                            result.animations.get(i).samplers.add(s, new gltfj_AnimationSampler());
+                        for (JsonNode sampler : aSamplers) {
+                            result.animations.get(a).samplers.add(s, new gltfj_AnimationSampler());
 
-                            result.animations.get(i).samplers.get(s).input = sampler.path("").asInt();
-                            result.animations.get(i).samplers.get(s).output = sampler.path("").asInt();
-                            result.animations.get(i).samplers.get(s).interpolation = gltfj_AnimationSampler.InterpolationType.valueOf(sampler.path("").asText().toUpperCase());
+                            result.animations.get(a).samplers.get(s).input = sampler.path("input").asInt();
+                            result.animations.get(a).samplers.get(s).output = sampler.path("output").asInt();
+                            result.animations.get(a).samplers.get(s).interpolation = gltfj_AnimationSampler.InterpolationType.valueOf(sampler.path("interpolation").asText().toUpperCase());
                         }
-                        result.animations.get(i).samplerCount = s;
+                        result.animations.get(a).samplerCount = s;
                     }
                 }
-                result.animationCount = i;
+                result.animationCount = a;
             }
 
             JsonNode materialVariants = root.path("materialVariants");
