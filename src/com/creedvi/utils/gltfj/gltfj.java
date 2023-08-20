@@ -198,10 +198,8 @@ public class gltfj {
 
                             p++;
                         }
-
-
+                        result.meshes.get(m).primitivesCount = p;
                     }
-
                     m++;
                 }
                 result.meshCount = m;
