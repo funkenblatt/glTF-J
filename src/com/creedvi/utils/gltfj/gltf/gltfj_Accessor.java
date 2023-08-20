@@ -9,7 +9,7 @@ public class gltfj_Accessor {
     }
 
     public enum AccessorDataType {
-        SIGNED_BYTE, UNSIGNED_BYTE, SIGNED_SHORT, UNSIGNED_SHORT, UNSIGNED_INT, FLOAT, INVALID
+        SIGNED_BYTE, UNSIGNED_BYTE, SIGNED_SHORT, UNSIGNED_SHORT, INVALID, UNSIGNED_INT, FLOAT
     }
 
     public int bufferView, byteOffset, count;
