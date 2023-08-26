@@ -15,6 +15,9 @@ public class gltfj_TextureView {
     public ArrayList<gltfj_Extension> extensions;
 
     public gltfj_TextureView() {
+        texture = -1;
+        texcoord = -1;
+
         transform = new gltfj_TextureTransform();
         extras = new gltfj_Extras();
         extensions = new ArrayList<>();

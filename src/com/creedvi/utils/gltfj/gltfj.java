@@ -18,12 +18,10 @@ import com.creedvi.utils.gltfj.gltf.texture.gltfj_Texture;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Base64;
 
 public class gltfj {
@@ -37,17 +35,29 @@ public class gltfj {
 
         if (fileName.substring(fileName.lastIndexOf(".")).equalsIgnoreCase(".gltf")) {
             String jsonText = LoadFileText(fileName);
+            if (jsonText == null) {
+                result.result = gltfj_glTF.ResultType.FAILURE;
+                return result;
+            }
             result = ReadJSON(jsonText);
             result.fileType = gltfj_glTF.FileType.GLTF;
+            result.result = gltfj_glTF.ResultType.SUCCESS;
         }
         else if (fileName.substring(fileName.lastIndexOf(".")).equalsIgnoreCase(".glb")) {
             byte[] fileData = LoadFileData(fileName);
+            if (fileData == null) {
+                result.result = gltfj_glTF.ResultType.FAILURE;
+                return result;
+            }
+            System.out.println(Arrays.toString(fileData));
             result = ReadBinary(fileData);
             result.fileType = gltfj_glTF.FileType.GLB;
+            result.result = gltfj_glTF.ResultType.SUCCESS;
         }
         else {
             System.out.println("[glTF-J] ERROR: Unknown file type " + fileName.substring(fileName.lastIndexOf(".")));
             result.fileType = gltfj_glTF.FileType.INVALID;
+            result.result = gltfj_glTF.ResultType.FAILURE;
         }
 
         return result;
@@ -62,10 +72,10 @@ public class gltfj {
 
             JsonNode asset = root.path("asset");
             if (!asset.isMissingNode()) {
-                result.asset.version = asset.path("version").asText();
-                result.asset.minVersion = asset.path("minVersion").asText();
-                result.asset.generator = asset.path("generator").asText();
-                result.asset.copyright = asset.path("copyright").asText();
+                result.asset.version = asset.path("version").asText(null);
+                result.asset.minVersion = asset.path("minVersion").asText(null);
+                result.asset.generator = asset.path("generator").asText(null);
+                result.asset.copyright = asset.path("copyright").asText(null);
             }
 
             JsonNode meshes = root.path("meshes");
@@ -74,7 +84,7 @@ public class gltfj {
                 for (JsonNode node : meshes) {
                     result.meshes.add(m, new gltfj_Mesh());
 
-                    result.meshes.get(m).name = node.path("name").asText();
+                    result.meshes.get(m).name = node.path("name").asText(null);
                     JsonNode weight = node.path("weight");
                     if (!weight.isMissingNode()) {
                         result.meshes.get(m).weights = new double[weight.size()];
@@ -92,7 +102,7 @@ public class gltfj {
 
                             result.meshes.get(m).primitives.get(p).indices = pri.path("indices").asInt();
                             result.meshes.get(m).primitives.get(p).material = pri.path("material").asInt();
-                            int mode = pri.path("mode").asInt(0);
+                            int mode = pri.path("mode").asInt(4);
                             result.meshes.get(m).primitives.get(p).type = gltfj_Primitive.PrimitiveType.values()[mode];
 
                             JsonNode attrib = pri.path("attributes");
@@ -117,14 +127,14 @@ public class gltfj {
                             }
                             if (!attrib.path("TEXCOORD_0").isMissingNode()) {
                                 result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
-                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.TEXCOORD_0;
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.TEXCOORD;
                                 result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("TEXCOORD_0").asInt();
                                 a++;
                             }
-                            if (!attrib.path("COLOR").isMissingNode()) {
+                            if (!attrib.path("COLOR_0").isMissingNode()) {
                                 result.meshes.get(m).primitives.get(p).attributes.add(new gltfj_Attribute());
                                 result.meshes.get(m).primitives.get(p).attributes.get(a).type = gltfj_Attribute.AttributeType.COLOR;
-                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("COLOR").asInt();
+                                result.meshes.get(m).primitives.get(p).attributes.get(a).index = attrib.path("COLOR_0").asInt();
                                 a++;
                             }
                             if (!attrib.path("JOINTS").isMissingNode()) {
@@ -169,14 +179,14 @@ public class gltfj {
                                     }
                                     if (!target.path("TEXCOORD_0").isMissingNode()) {
                                         result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
-                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.TEXCOORD_0;
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.TEXCOORD;
                                         result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("TEXCOORD_0").asInt();
                                         ta++;
                                     }
-                                    if (!target.path("COLOR").isMissingNode()) {
+                                    if (!target.path("COLOR_0").isMissingNode()) {
                                         result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.add(new gltfj_Attribute());
                                         result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).type = gltfj_Attribute.AttributeType.COLOR;
-                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("COLOR").asInt();
+                                        result.meshes.get(m).primitives.get(p).targets.get(ta).attributes.get(ta).index = target.path("COLOR_0").asInt();
                                         ta++;
                                     }
                                     if (!target.path("JOINTS").isMissingNode()) {
@@ -211,7 +221,7 @@ public class gltfj {
                 for (JsonNode material : materials) {
                     gltfj_Material mat = new gltfj_Material();
 
-                    mat.name = material.path("name").asText();
+                    mat.name = material.path("name").asText(null);
                     mat.alphaMode = gltfj_Material.AlphaMode.valueOf(material.path("alphaMode").asText("OPAQUE").toUpperCase());
                     mat.alphaCutoff = material.path("alphaCutoff").asDouble();
                     mat.doubleSided = material.path("doubleSided").asBoolean();
@@ -306,8 +316,11 @@ public class gltfj {
                         JsonNode baseColour = met.path("baseColorFactor");
                         if (!baseColour.isMissingNode()) {
                             for (int bcf = 0; bcf < baseColour.size(); bcf++) {
-                                mat.metallicRoughness.baseColorFactor[bcf] = baseColour.get(bcf).asDouble();
+                                mat.metallicRoughness.baseColorFactor[bcf] = baseColour.get(bcf).asDouble(1.0);
                             }
+                        }
+                        else {
+                            mat.metallicRoughness.baseColorFactor = new double[]{1.0, 1.0, 1.0, 1.0};
                         }
                         mat.metallicRoughness.metallicFactor = met.path("metallicFactor").asDouble();
                         mat.metallicRoughness.roughnessFactor = met.path("roughnessFactor").asDouble();
@@ -747,7 +760,7 @@ public class gltfj {
                     result.accessors.get(a).byteOffset = accessor.path("byteOffset").asInt();
                     result.accessors.get(a).count = accessor.path("count").asInt();
 
-                    String type = accessor.path("type").asText().toUpperCase();
+                    String type = accessor.path("type").asText(null).toUpperCase();
                     result.accessors.get(a).type = gltfj_Accessor.AccessorType.valueOf(type);
 
                     int compType =  accessor.path("componentType").asInt();
@@ -786,9 +799,9 @@ public class gltfj {
                 for (JsonNode node : bufferViews) {
                     result.bufferViews.add(bv, new gltfj_BufferView());
 
-                    result.bufferViews.get(bv).name = node.path("name").asText();
+                    result.bufferViews.get(bv).name = node.path("name").asText(null);
                     result.bufferViews.get(bv).buffer = node.path("buffer").asInt();
-                    result.bufferViews.get(bv).offset = node.path("offset").asInt();
+                    result.bufferViews.get(bv).offset = node.path("byteOffset").asInt();
                     result.bufferViews.get(bv).size = node.path("byteLength").asInt();
                     result.bufferViews.get(bv).stride = node.path("byteStride").asInt();
 
@@ -802,6 +815,8 @@ public class gltfj {
                     else {
                         result.bufferViews.get(bv).target = gltfj_BufferView.BufferViewTarget.INVALID;
                     }
+
+                    bv++;
                 }
                 result.bufferViewCount = bv;
             }
@@ -812,8 +827,8 @@ public class gltfj {
                 for (JsonNode node : buffers) {
                     result.buffers.add(b, new gltfj_Buffer());
 
-                    result.buffers.get(b).name = node.path("name").asText();
-                    result.buffers.get(b).uri = node.path("uri").asText();
+                    result.buffers.get(b).name = node.path("name").asText(null);
+                    result.buffers.get(b).uri = node.path("uri").asText(null);
                     result.buffers.get(b).size = node.path("byteLength").asInt();
 
                     if (result.buffers.get(b).uri != null) {
@@ -837,9 +852,9 @@ public class gltfj {
                 for (JsonNode node: images) {
                     result.images.add(i, new gltfj_Image());
 
-                    result.images.get(i).name = node.path("name").asText();
-                    result.images.get(i).uri = node.path("uri").asText();
-                    result.images.get(i).mimeType = node.path("mimeType").asText();
+                    result.images.get(i).name = node.path("name").asText(null);
+                    result.images.get(i).uri = node.path("uri").asText(null);
+                    result.images.get(i).mimeType = node.path("mimeType").asText(null);
                     result.images.get(i).bufferView = node.path("bufferView").asInt();
 
                     i++;
@@ -867,7 +882,7 @@ public class gltfj {
                 for (JsonNode node : samplers) {
                     result.samplers.add(s, new gltfj_Sampler());
 
-                    result.samplers.get(s).name = node.path("name").asText();
+                    result.samplers.get(s).name = node.path("name").asText(null);
                     result.samplers.get(s).magFilter = node.path("magFilter").asInt();
                     result.samplers.get(s).minFilter = node.path("minFilter").asInt();
                     result.samplers.get(s).sWrap = node.path("wrapS").asInt();
@@ -884,7 +899,7 @@ public class gltfj {
                 for (JsonNode node : skins) {
                     result.skins.add(s, new gltfj_Skin());
 
-                    result.skins.get(s).name = node.path("name").asText();
+                    result.skins.get(s).name = node.path("name").asText(null);
                     result.skins.get(s).inverseBindMatrices = node.path("inverseBindMatrices").asInt();
                     result.skins.get(s).skeleton = node.path("skeleton").asInt();
 
@@ -897,6 +912,8 @@ public class gltfj {
                         }
                         result.skins.get(s).jointsCount = j;
                     }
+
+                    s++;
                 }
                 result.skinCount = s;
             }
@@ -907,8 +924,8 @@ public class gltfj {
                 for (JsonNode node : cameras) {
                     result.cameras.add(c, new gltfj_Camera());
 
-                    result.cameras.get(c).name = node.path("name").asText();
-                    result.cameras.get(c).type = gltfj_Camera.CameraType.valueOf(node.path("type").asText().toUpperCase());
+                    result.cameras.get(c).name = node.path("name").asText(null);
+                    result.cameras.get(c).type = gltfj_Camera.CameraType.valueOf(node.path("type").asText(null).toUpperCase());
 
                     if (result.cameras.get(c).type == gltfj_Camera.CameraType.ORTHOGRAPHIC) {
                         result.cameras.get(c).data_o = new gltfj_CameraOrthographic();
@@ -932,6 +949,8 @@ public class gltfj {
                         result.cameras.get(c).data_p.z_far = pers.path("zfar").asDouble();
                         result.cameras.get(c).data_p.z_near = pers.path("znear").asDouble();
                     }
+
+                    c++;
                 }
                 result.cameraCount = c;
             }
@@ -942,7 +961,7 @@ public class gltfj {
                 for (JsonNode node : lights) {
                     result.lights.add(l, new gltfj_Light());
 
-                    result.lights.get(l).name = node.path("name").asText();
+                    result.lights.get(l).name = node.path("name").asText(null);
                     result.lights.get(l).intensity = node.path("intensity").asDouble();
                     result.lights.get(l).range = node.path("range").asDouble();
                     result.lights.get(l).spot_InnerConeAngle = node.path("innerConeAngle").asDouble();
@@ -954,6 +973,8 @@ public class gltfj {
                     for (int j = 0; j < colour.size(); j++) {
                         result.lights.get(l).color[j] = colour.get(j).asDouble();
                     }
+
+                    l++;
                 }
                 result.lightCount = l;
             }
@@ -964,7 +985,7 @@ public class gltfj {
                 for (JsonNode node : nodes) {
                     result.nodes.add(n, new gltfj_Node());
 
-                    result.nodes.get(n).name = node.path("name").asText();
+                    result.nodes.get(n).name = node.path("name").asText(null);
                     result.nodes.get(n).skin = node.path("skin").asInt(0);
                     result.nodes.get(n).mesh = node.path("mesh").asInt(0);
                     result.nodes.get(n).camera = node.path("camera").asInt(0);
@@ -1013,6 +1034,7 @@ public class gltfj {
                     }
                     result.nodes.get(n).childrenCount = chi.size();
 
+                    n++;
                 }
                 result.nodeCount = n;
             }
@@ -1025,12 +1047,14 @@ public class gltfj {
                 for (JsonNode node : scenes) {
                     result.scenes.add(s, new gltfj_Scene());
 
-                    result.scenes.get(s).name = node.path("name").asText();
+                    result.scenes.get(s).name = node.path("name").asText(null);
                     JsonNode sNode = root.path("nodes");
                     result.scenes.get(s).nodes = new int[sNode.size()];
                     for (int j = 0; j < sNode.size(); j++) {
                         result.scenes.get(s).nodes[j] = sNode.get(j).asInt();
                     }
+
+                    s++;
                 }
                 result.sceneCount = s;
             }
@@ -1041,7 +1065,7 @@ public class gltfj {
                 for (JsonNode node : animations) {
                     result.animations.add(a, new gltfj_Animation());
 
-                    result.animations.get(a).name = node.path("name").asText();
+                    result.animations.get(a).name = node.path("name").asText(null);
 
                     JsonNode channels = node.path("channels");
                     if (!channels.isMissingNode()) {
@@ -1065,10 +1089,12 @@ public class gltfj {
 
                             result.animations.get(a).samplers.get(s).input = sampler.path("input").asInt();
                             result.animations.get(a).samplers.get(s).output = sampler.path("output").asInt();
-                            result.animations.get(a).samplers.get(s).interpolation = gltfj_AnimationSampler.InterpolationType.valueOf(sampler.path("interpolation").asText().toUpperCase());
+                            result.animations.get(a).samplers.get(s).interpolation = gltfj_AnimationSampler.InterpolationType.valueOf(sampler.path("interpolation").asText(null).toUpperCase());
                         }
                         result.animations.get(a).samplerCount = s;
                     }
+
+                    a++;
                 }
                 result.animationCount = a;
             }
@@ -1087,7 +1113,6 @@ public class gltfj {
             e.printStackTrace();
         }
 
-
         return result;
     }
 
@@ -1096,8 +1121,8 @@ public class gltfj {
 
         int ptr = 0;
         char[] magic = new char[4];
-        for (int i = 0; i < 4; i++, ptr++) {
-            magic[i] = (char) fileData[ptr];
+        for (int i = 0; i < 4; i++) {
+            magic[i] = (char) fileData[ptr++];
         }
         if (magic[0] != 'g'|| magic[1] != 'l' || magic[2] != 'T' || magic[3] != 'F') {
             System.out.println("[glTF-J] Error: File failed checksum. Invalid binary data.");
@@ -1106,15 +1131,15 @@ public class gltfj {
 
         int version;
         byte[] buffer = new byte[Integer.BYTES];
-        for (int i = 0; i < Integer.BYTES; i++, ptr++) {
-            buffer[i] = fileData[ptr];
+        for (int i = 0; i < Integer.BYTES; i++) {
+            buffer[i] = fileData[ptr++];
         }
         version = ByteArrayToInt(buffer);
         System.out.println("[glTF-J] INFO: file version: " + version);
 
         int size;
-        for (int i = 0; i < Integer.BYTES; i++, ptr++) {
-            buffer[i] = fileData[ptr];
+        for (int i = 0; i < Integer.BYTES; i++) {
+            buffer[i] = fileData[ptr++];
         }
         size = ByteArrayToInt(buffer);
         System.out.println("[glTF-J] INFO: file size: " + size + " bytes");
@@ -1122,20 +1147,20 @@ public class gltfj {
         //parse chunks
         while (ptr < fileData.length){
             int chunkLength, chunkType;
-            for (int i = 0; i < Integer.BYTES; i++, ptr++) {
-                buffer[i] = fileData[ptr];
+            for (int i = 0; i < Integer.BYTES; i++) {
+                buffer[i] = fileData[ptr++];
             }
             chunkLength = ByteArrayToInt(buffer);
-            for (int i = 0; i < Integer.BYTES; i++, ptr++) {
-                buffer[i] = fileData[ptr];
+            for (int i = 0; i < Integer.BYTES; i++) {
+                buffer[i] = fileData[ptr++];
             }
             chunkType = ByteArrayToInt(buffer);
 
             if (chunkType == 0x4E4F534A) {
                 //Chunk is type JSON
                 String jsonText = "";
-                for (int i = 0; i < chunkLength; i++, ptr++) {
-                    jsonText += (char) fileData[ptr];
+                for (int i = 0; i < chunkLength; i++) {
+                    jsonText += (char) fileData[ptr++];
                 }
                 result = ReadJSON(jsonText);
             }
@@ -1143,8 +1168,8 @@ public class gltfj {
                 //Chunk is not type JSON and clearly of the BIN.
                 for (int b = 0; b < result.bufferCount; b++) {
                     result.buffers.get(b).data = new byte[result.buffers.get(b).size];
-                    for (int i = 0; i < result.buffers.get(b).size; i++, ptr++) {
-                        result.buffers.get(b).data[i] = fileData[ptr];
+                    for (int i = 0; i < result.buffers.get(b).size; i++) {
+                        result.buffers.get(b).data[i] = fileData[ptr++];
                     }
                 }
             }
@@ -1163,53 +1188,62 @@ public class gltfj {
         InputStream inputStream;
         if (fileName.contains("/")) {
             inputStream = gltfj.class.getResourceAsStream(fileName.substring(fileName.lastIndexOf('/')));
-        } else {
+        }
+        else {
             inputStream = gltfj.class.getResourceAsStream("/" + fileName);
         }
         if (inputStream == null) {
             String ext = fileName.substring(fileName.lastIndexOf('.')).toUpperCase();
             inputStream = gltfj.class.getResourceAsStream(fileName.substring(0, fileName.lastIndexOf('.')) + ext);
         }
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        if (inputStream != null) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
 
-        String[] tmp = reader.lines().toArray(String[]::new);
-        StringBuilder builder = new StringBuilder();
+            String[] tmp = reader.lines().toArray(String[]::new);
+            StringBuilder builder = new StringBuilder();
 
-        for (String s : tmp) {
-            builder.append(s);
-            builder.append("\n");
-        }
+            for (String s : tmp) {
+                builder.append(s);
+                builder.append("\n");
+            }
 
-        if (tmp != null) {
             return builder.toString();
+        }
+        else {
+            System.out.println("[glTF-J] Failed to open file: " + fileName);
         }
         return null;
     }
 
     private static byte[] LoadFileData(String fileName) {
-        byte[] data = null;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
         InputStream inputStream;
         if (fileName.contains("/")) {
             inputStream = gltfj.class.getResourceAsStream(fileName.substring(fileName.lastIndexOf('/')));
-        } else {
-            inputStream = gltfj.class.getResourceAsStream("/" + fileName);
         }
-        if (inputStream == null) {
-            String ext = fileName.substring(fileName.lastIndexOf('.')).toUpperCase();
-            inputStream = gltfj.class.getResourceAsStream(fileName.substring(0, fileName.lastIndexOf('.')) + ext);
+        else {
+            inputStream = gltfj.class.getResourceAsStream("/" + fileName);
         }
 
         if (inputStream != null) {
             try {
-                data = new byte[inputStream.available()];
-                inputStream.read(data);
-            } catch (Exception e) {
-                e.printStackTrace();
+                int read;
+                byte[] input = new byte[4096];
+                while (-1 != (read = inputStream.read(input))) {
+                    buffer.write(input, 0, read);
+                }
             }
-        }
+            catch (IOException e) {
+                throw new RuntimeException(e);
+            }
 
-        return data;
+            return buffer.toByteArray();
+        }
+        else {
+            System.out.println("[glTF-J] Failed to open file: " + fileName);
+        }
+        return null;
     }
 
     // Convert array of four bytes to int

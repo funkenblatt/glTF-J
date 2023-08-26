@@ -16,6 +16,10 @@ public class gltfj_glTF {
         INVALID, GLTF, GLB
     }
 
+    public enum ResultType {
+        SUCCESS, FAILURE
+    }
+
     public int scene, meshCount, materialCount, accessorCount, bufferViewCount, bufferCount, imageCount, textureCount,
             samplerCount, skinCount, cameraCount, lightCount, nodeCount, sceneCount, animationCount, materialVariantCount, extensionCount;
 
@@ -42,6 +46,7 @@ public class gltfj_glTF {
     public gltfj_Extras extras;
 
     public FileType fileType;
+    public ResultType result;
 
     public gltfj_glTF() {
         asset = new gltfj_Asset();
