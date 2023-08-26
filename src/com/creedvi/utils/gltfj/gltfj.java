@@ -14,14 +14,12 @@ import com.creedvi.utils.gltfj.gltf.mesh.gltfj_MorphTarget;
 import com.creedvi.utils.gltfj.gltf.mesh.gltfj_Primitive;
 import com.creedvi.utils.gltfj.gltf.texture.gltfj_Sampler;
 import com.creedvi.utils.gltfj.gltf.texture.gltfj_Texture;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
 import java.util.Base64;
 
 public class gltfj {
@@ -49,7 +47,6 @@ public class gltfj {
                 result.result = gltfj_glTF.ResultType.FAILURE;
                 return result;
             }
-            System.out.println(Arrays.toString(fileData));
             result = ReadBinary(fileData);
             result.fileType = gltfj_glTF.FileType.GLB;
             result.result = gltfj_glTF.ResultType.SUCCESS;
